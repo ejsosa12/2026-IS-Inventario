@@ -14,17 +14,30 @@ def login():
     body = request.get_json(silent=True)
 
     if not body:
-        return {"error": "data login is required"}, 400
+        return {
+                "status": 1,
+                "message": "data login is required",
+                "token" : None
+        }, 400
 
     email = body.get("email")
     password = body.get("password")
 
     # Test if json has attribute query
     if not email:
-        return {"error": "email is required"}, 400
+        return {
+                "status" : 1,
+                "message": "email is required",
+                "token" : None
+        }, 400
 
     if not password:
-        return {"error": "password is required"}, 400
+        return {
+                "status" : 1,
+                "message": "password is required",
+                "token": None
+        }, 
+        400
 
     if not AccessData().user_exists(email, password):
         return {
@@ -42,11 +55,11 @@ def login():
         "iat": now,
         "exp": now + timedelta(hours=expires_in),
     }
+
     token = jwt.encode(payload, os.getenv("JWT_SECRET"), algorithm="HS256")
 
     return {
         "status": 0,
         "message": "SUCCESS: Starting user login",
-        "data": True,
         "token": token,
     }, 200
