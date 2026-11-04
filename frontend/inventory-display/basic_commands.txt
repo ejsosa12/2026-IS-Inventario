@@ -1,0 +1,77 @@
+FRONTEND
+* crear nuevo proyecto angular
+ng new [nombre]
+* crear un nuevo componente
+ng generate component <component-name>
+ng g c <component-name>
+* crear interfaz
+ng generate interface paht/para/nuevo/componente
+	- ejemplo
+	ng generate interface models/contacto
+  - NOTA: De manera opcional es posible generar la interfaz
+          por medio de solo crear una carpeta y crear un archivo .ts
+          y generando la interaz con codigo crudo.
+* crear servicio
+ng genereta service path/para/servicio/
+  - ejemplo
+  ng g s services/backend/contactos
+* crear interfaz
+ng generate interface path/para/nuevo/servicio
+ - ejemplo
+	ng generate interface models/contacto
+* ejecutar proyecto en entorno de prueba
+ng serve -o
+
+BACKEND
+* crear packete
+npm init
+
+* instalar express
+npm install express --save
+* instalar mysql2
+npm install mysql2 --save
+* instalar nodemon
+npm install nodemon --save
+
+* configuración basica de backend
+src
+├── certs
+│   └── DigiCertGlobalRootG2.crt.pem
+├── config
+│   ├── base.js
+│   └── db.js
+├── db
+│   └── scripts.sql
+├── index.js
+└── rutas
+    └── contactos.js
+
+* instalar cors (Cross-Origin Resource Sharing (CORS) Issue)
+npm install corcs
+  *** NOTA:
+  Al momento de crear el cliente HTTP (httpClient) en el frontend
+  en angular puede aparecer el error de "Cross-Origin". Para arreglar
+  esto es necesario descargar el paquete "CORS" en npm aca en el
+  backend para arreglar eso.
+  *** NOTA 2:
+  Al momento de crear un servicio en el frontend y del cual necesite
+  de realizar peticiones http es necesario agregar al archivo
+  "app.config.ts" la función "provideHttpClient()"
+
+
+* ejecutar backend node
+node /path/index.js
+* ejecutar backend nodemon
+nodemon /path/index.js
+
+* inicio de sesión (se venzca la sención)
+JWT (java web token)
+
+tokens que tienen una vigencia para iniciar sesion.
+Si este token se vence se cierra la sesion
+
+middleware: es una evaluacion intermedia que ocurre antes de ejecutar
+la respuesta que esta definida en el router
+
+* instalar JWT y bcryptjs para usar autenticacion de usuario
+npm install jsonwebtoken bcryptjs
