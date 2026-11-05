@@ -10,8 +10,7 @@ export class Toolbar {
   private authService  = inject(AuthService);
 
   logout(){
-    // TODO: logout function
-    // this.authService.logout();
+    this.authService.logout();
   }
 
 }
