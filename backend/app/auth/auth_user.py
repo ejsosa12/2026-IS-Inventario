@@ -36,8 +36,7 @@ def login():
                 "status" : 1,
                 "message": "password is required",
                 "token": None
-        }, 
-        400
+        }, 400
 
     if not AccessData().user_exists(email, password):
         return {
