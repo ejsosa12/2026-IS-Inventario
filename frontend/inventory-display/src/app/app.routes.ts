@@ -1,8 +1,11 @@
 import { Routes } from '@angular/router';
+import { publicGuard } from './core/guards/public-guard';
+import { authGuard } from './core/guards/auth-guard';
 
 export const routes: Routes = [
    //Home page
   {path: 'home',
+    canActivate: [publicGuard],
     loadComponent: () => import('./domain/home/home').then(h => h.Home),
     children: [
       {
@@ -15,6 +18,20 @@ export const routes: Routes = [
       }
     ]
   },
+
+  {path: 'content',
+    canActivate: [authGuard],
+    loadComponent: () => import('./domain/content/content').then(c => c.Content),
+    children : [
+      {
+        path : '', redirectTo : 'content', pathMatch : 'full'
+      },
+      {
+        path: 'dashboard', loadComponent: () => import('./utils/dashboard/dashboard').then(d => d.Dashboard)
+      },
+    ]
+  },
+
     // Redirects user in case route es empty
   {path: '', redirectTo : '/home', pathMatch: 'full'},
 
