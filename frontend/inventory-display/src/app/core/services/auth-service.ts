@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { computed, inject, Service, signal } from '@angular/core';
+import { inject, Service, signal } from '@angular/core';
 import { tap } from 'rxjs';
 
 export interface LoginRequest {
@@ -17,6 +17,7 @@ export interface LoginResponse {
 @Service()
 export class AuthService {
   private readonly API_URL = 'http://localhost:5000/api/v1';
+  readonly LOGIN_URL = `${this.API_URL}/login`;
 
   private http = inject(HttpClient);
   private _token = signal<string | null>(localStorage.getItem('token'));
@@ -27,13 +28,35 @@ export class AuthService {
   loading = this._loading.asReadonly();
   error = this._error.asReadonly();
 
-  isAuthenticated = computed(() => !!this.token());
+  // A method, not a computed: a computed would not re-run just because time passed
+  isAuthenticated(): boolean {
+    const token = this._token();
+    if (!token) {
+      return false;
+    }
+    if (this.isTokenExpired(token)) {
+      this.logout();
+      return false;
+    }
+    return true;
+  }
+
+  // Reads "exp" from the JWT payload. This is only for UX: Flask is the one that verifies the signature
+  private isTokenExpired(token: string): boolean {
+    try {
+      const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+      return Date.now() >= payload.exp * 1000; // exp comes in seconds
+    } catch {
+      return true; // malformed token = invalid
+    }
+  }
 
   login(credentials: LoginRequest) {
     this._loading.set(true);
     this._error.set(null);
 
-    return this.http.post<LoginResponse>(`${this.API_URL}/login`, credentials).pipe(
+    return this.http.post<LoginResponse>(this.LOGIN_URL, credentials).pipe(
       tap({
         next: (response) => {
           if (response.token) {
