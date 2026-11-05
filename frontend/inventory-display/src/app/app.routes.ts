@@ -24,11 +24,20 @@ export const routes: Routes = [
     loadComponent: () => import('./domain/content/content').then(c => c.Content),
     children : [
       {
-        path : '', redirectTo : 'content', pathMatch : 'full'
+        path : '', redirectTo : 'dashboard', pathMatch : 'full'
       },
       {
         path: 'dashboard', loadComponent: () => import('./utils/dashboard/dashboard').then(d => d.Dashboard)
       },
+      {
+        path: 'settings', loadComponent: () => import('./utils/settings/settings').then(s => s.Settings)
+      },
+      {
+        path: 'products', loadComponent: () => import('./utils/products/products').then(p => p.Products)
+      },
+      {
+        path: 'products/add-product', loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
+      }
     ]
   },
 

@@ -1,10 +1,9 @@
 import { Component } from '@angular/core';
-import { Toolbar } from '../../utils/toolbar/toolbar';
 import { RouterOutlet } from '@angular/router';
-import { Dashboard } from '../../utils/dashboard/dashboard';
+import { SideBar } from '../../utils/side-bar/side-bar';
 
 @Component({
-  imports: [Toolbar, RouterOutlet, Dashboard],
+  imports: [RouterOutlet, SideBar],
   selector: 'app-content',
   templateUrl: './content.html',
 })
