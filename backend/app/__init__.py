@@ -22,7 +22,9 @@ def create_app():
         return {"error": "Endpoint not found"}, 404
 
     from .auth import auth_user
+    from .catalog import catalog
 
     app.register_blueprint(auth_user, url_prefix='/')
+    app.register_blueprint(catalog, url_prefix='/')
 
     return app
