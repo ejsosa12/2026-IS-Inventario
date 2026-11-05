@@ -102,3 +102,41 @@ create table movements(
 	FOREIGN KEY(usuario_id) REFERENCES users(users),
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id)
 );
+
+-- ============================================================
+-- Datos de ejemplo: categorías, productos y presentaciones
+-- Se usan subconsultas en vez de ids fijos para no depender
+-- del orden en que se insertaron.
+-- ============================================================
+
+INSERT INTO categories (nombre) VALUES
+	('Clavos y tornillos'),
+	('Plomería'),
+	('Construcción'),
+	('Herramientas'),
+	('Electricidad');
+
+INSERT INTO products (codigo, nombre, precio, unidad_base, stock_minimo, activo, categoria_id) VALUES
+	-- Por libra (HU-06): se compran en caja
+	('CLA-003', 'Clavo de 3 pulgadas', 8.50, 'lb', 20, true, (SELECT id FROM categories WHERE nombre = 'Clavos y tornillos')),
+	('CLA-002', 'Clavo de 2 pulgadas', 9.00, 'lb', 15, true, (SELECT id FROM categories WHERE nombre = 'Clavos y tornillos')),
+	-- Por metro (HU-07): se compran en rollo
+	('MAN-050', 'Manguera de jardín 1/2"', 6.00, 'm', 30, true, (SELECT id FROM categories WHERE nombre = 'Plomería')),
+	('CAB-012', 'Cable eléctrico calibre 12', 4.50, 'm', 50, true, (SELECT id FROM categories WHERE nombre = 'Electricidad')),
+	-- Por unidad
+	('CEM-042', 'Cemento gris 42.5 kg', 85.00, 'unidad', 20, true, (SELECT id FROM categories WHERE nombre = 'Construcción')),
+	('TUB-PVC', 'Tubo PVC 1/2" x 6 m', 22.00, 'unidad', 10, true, (SELECT id FROM categories WHERE nombre = 'Plomería')),
+	('TOR-158', 'Tornillo para madera 1 5/8"', 0.35, 'unidad', 100, true, (SELECT id FROM categories WHERE nombre = 'Clavos y tornillos')),
+	-- Sin stock mínimo: no genera alertas (HU-21)
+	('MAR-016', 'Martillo de uña 16 oz', 65.00, 'unidad', NULL, true, (SELECT id FROM categories WHERE nombre = 'Herramientas')),
+	-- Dado de baja (HU-04): no debe salir en búsquedas
+	('BRO-OLD', 'Juego de brocas (descontinuado)', 120.00, 'unidad', NULL, false, (SELECT id FROM categories WHERE nombre = 'Herramientas'));
+
+INSERT INTO presentations (producto_id, nombre, factor) VALUES
+	((SELECT id FROM products WHERE codigo = 'CLA-003'), 'caja', 50),
+	((SELECT id FROM products WHERE codigo = 'CLA-002'), 'caja', 50),
+	-- Un producto puede tener varias presentaciones
+	((SELECT id FROM products WHERE codigo = 'CLA-002'), 'bolsa', 5),
+	((SELECT id FROM products WHERE codigo = 'MAN-050'), 'rollo', 30),
+	((SELECT id FROM products WHERE codigo = 'CAB-012'), 'rollo', 100),
+	((SELECT id FROM products WHERE codigo = 'TOR-158'), 'caja', 100);
