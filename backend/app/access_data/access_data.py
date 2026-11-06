@@ -137,3 +137,44 @@ class AccessData:
                 new_id = cursor.lastrowid
             conn.commit()
             return new_id
+
+    # ------------------------------------------------------------
+    # Suppliers
+    # ------------------------------------------------------------
+
+    def get_suppliers(self):
+        """Devuelve todos los proveedores ordenados por nombre."""
+        query = "SELECT id, nombre, telefono, nit FROM suppliers ORDER BY nombre"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
+    def get_supplier_by_id(self, supplier_id):
+        """Devuelve el proveedor como dict, o None si no existe."""
+        query = "SELECT id, nombre, telefono, nit FROM suppliers WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": supplier_id})
+                return cursor.fetchone()
+
+    def supplier_nit_exists(self, nit):
+        """True si ya hay un proveedor con ese NIT."""
+        query = "SELECT 1 FROM suppliers WHERE nit = %(nit)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"nit": nit})
+                return cursor.fetchone() is not None
+
+    def add_supplier(self, nombre, telefono=None, nit=None):
+        """Inserta un proveedor nuevo y devuelve su id.
+
+        Lanza pymysql.err.IntegrityError si el NIT ya existe.
+        """
+        query = "INSERT INTO suppliers (nombre, telefono, nit) VALUES (%(nombre)s, %(telefono)s, %(nit)s)"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"nombre": nombre, "telefono": telefono, "nit": nit})
+                new_id = cursor.lastrowid
+            conn.commit()
+            return new_id

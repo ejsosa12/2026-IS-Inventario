@@ -49,7 +49,10 @@ create table suppliers(
 	id int AUTO_INCREMENT not null,
 	nombre varchar(100) not null,
 	telefono varchar(20),
-	PRIMARY KEY(id)
+	-- Opcional. Si se pone, no puede repetirse (varios NULL sí se permiten)
+	nit varchar(20),
+	PRIMARY KEY(id),
+	UNIQUE(nit)
 );
 
 -- HU-01, HU-02, HU-04, HU-21
@@ -143,14 +146,14 @@ INSERT INTO presentations (producto_id, nombre, factor) VALUES
 
 -- ============================================================
 -- Datos de ejemplo: proveedores (HU-09)
--- Nombres y teléfonos inventados
+-- Nombres, teléfonos y NIT inventados
 -- ============================================================
 
-INSERT INTO suppliers (nombre, telefono) VALUES
-	('Distribuidora Ferretera del Norte', '2234-5678'),
-	('Clavos y Alambres La Fragua', '2456-7890'),
-	('Plomería y Riego San Miguel', '5512-3344'),
-	('Cementos y Agregados El Volcán', '7765-4321'),
-	('Eléctrica Industrial Centro', '2298-1100'),
-	-- Sin teléfono: telefono acepta NULL
-	('Herramientas Don Chepe', NULL);
+INSERT INTO suppliers (nombre, telefono, nit) VALUES
+	('Distribuidora Ferretera del Norte', '2234-5678', '4521873-6'),
+	('Clavos y Alambres La Fragua', '2456-7890', '1098345-2'),
+	('Plomería y Riego San Miguel', '5512-3344', '7734120-9'),
+	('Cementos y Agregados El Volcán', '7765-4321', '3365091-K'),
+	('Eléctrica Industrial Centro', '2298-1100', '8812457-4'),
+	-- Sin teléfono ni NIT: los dos son opcionales (HU-09)
+	('Herramientas Don Chepe', NULL, NULL);
