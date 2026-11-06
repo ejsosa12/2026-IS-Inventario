@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { DataServices } from '../../core/services/data-services';
 import { ProductListItem, UnidadBase } from '../../models/product';
@@ -19,6 +19,24 @@ export class Products {
   products = signal<ProductListItem[]>([]);
   loading = signal(true);
   error = signal<string | null>(null);
+  query = signal('');
+
+  // HU-03: every word typed must appear in the name or the code, in any order.
+  // "tubo 1/2" finds "Tubo PVC 1/2\" x 6 m". Case and accents do not matter.
+  filtered = computed(() => {
+    const words = this.normalize(this.query()).split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      return this.products();
+    }
+    return this.products().filter((product) => {
+      // HU-04: inactive products do not show up in searches
+      if (!product.activo) {
+        return false;
+      }
+      const text = this.normalize(`${product.nombre} ${product.codigo}`);
+      return words.every((word) => text.includes(word));
+    });
+  });
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
 
@@ -33,6 +51,11 @@ export class Products {
         this.loading.set(false);
       },
     });
+  }
+
+  // "Cemento GRIS" -> "cemento gris", "Plomería" -> "plomeria"
+  private normalize(text: string): string {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   }
 
   // HU-04, HU-21, HU-22: the badge on each row

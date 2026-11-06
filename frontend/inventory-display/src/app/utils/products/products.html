@@ -31,6 +31,7 @@
         <!-- Top Header -->
         <header class="bg-white shadow-sm border-b border-gray-200">
             <div class="px-6 py-4">
+                <!-- Title on the left, button on the right -->
                 <div class="flex items-center justify-between">
                     <div>
                         <h1 class="text-2xl font-semibold text-gray-900">Productos</h1>
@@ -38,11 +39,11 @@
                     </div>
                     <div class="flex items-center space-x-4">
 
-                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <div>
                            <a href="content/products/add-product">
                             <i class="text-purple-600"></i>
-                            <button type="submit"
-                              class="px-4 py-2 bg-blue-800 text-white rounded-lg
+                            <button type="button"
+                              class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg
                                      hover:bg-slate-800 disabled:opacity-60 transition-colors">
                                       Agregar Producto
                             </button>
@@ -69,8 +70,10 @@
                         <div class="relative">
                             <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2
                               text-gray-400"></i>
-                            <!-- Implementar buscar prodcuto aca-->
-                            <input type="text" placeholder="Buscar producto..." class="pl-10 pr-4 py-2 border
+                            <!-- HU-03: search by part of the name or the code -->
+                            <input type="search" placeholder="Buscar producto..."
+                            [value]="query()" (input)="query.set($any($event.target).value)"
+                            class="pl-10 pr-4 py-2 border
                             border-gray-300 rounded-lg focus:ring-2 focus:ring-cordes-accent
                             focus:border-transparent outline-none">
                         </div>
@@ -117,7 +120,7 @@
                             </thead>
 
                             <tbody class="bg-white divide-y divide-gray-200">
-                              @for (product of products(); track product.id) {
+                              @for (product of filtered(); track product.id) {
                                 <tr class="hover:bg-gray-50" [class.opacity-60]="!product.activo">
                                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     {{ product.codigo }}
@@ -151,6 +154,12 @@
                                       {{ estado(product).classes }}">
                                       {{ estado(product).label }}
                                     </span>
+                                  </td>
+                                </tr>
+                              } @empty {
+                                <tr>
+                                  <td colspan="6" class="px-6 py-8 text-center text-sm text-gray-500">
+                                    No se encontró ningún producto con "{{ query() }}"
                                   </td>
                                 </tr>
                               }
