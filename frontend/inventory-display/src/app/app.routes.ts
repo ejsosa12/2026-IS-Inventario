@@ -37,7 +37,13 @@ export const routes: Routes = [
       },
       {
         path: 'products/add-product', loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
-      }
+      },
+      {
+        path: 'suppliers', loadComponent: () => import('./utils/suppliers/suppliers').then(s => s.Suppliers)
+      },
+      {
+        path: 'suppliers/add-supplier', loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
+      },
     ]
   },
 
