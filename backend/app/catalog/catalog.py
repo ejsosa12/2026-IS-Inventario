@@ -4,6 +4,7 @@ from flask import Blueprint, request
 import pymysql
 
 from app.access_data import AccessData
+from app.security import requiere_rol
 
 catalog = Blueprint('catalog', __name__)
 
@@ -38,6 +39,7 @@ def _product_to_json(product):
 
 
 @catalog.route('api/v1/add-product', methods=['POST'])
+@requiere_rol('admin')  # HU-29: only the owner manages the catalog
 def add_product():
     body = request.get_json(silent=True)
 
@@ -105,3 +107,27 @@ def add_product():
         "message": "SUCCESS: product created",
         "data": _product_to_json(access.get_product_by_id(new_id)),
     }, 201
+
+
+@catalog.route('api/v1/products', methods=['GET'])
+@requiere_rol()  # any logged-in user (HU-19: employees also check stock)
+def get_products():
+    products = [
+        {**_product_to_json(product), "existencia": float(product["existencia"])}
+        for product in AccessData().get_products()
+    ]
+    return {
+        "status": 0,
+        "message": "SUCCESS: products",
+        "data": products,
+    }, 200
+
+
+@catalog.route('api/v1/categories', methods=['GET'])
+@requiere_rol()  # any logged-in user
+def get_categories():
+    return {
+        "status": 0,
+        "message": "SUCCESS: categories",
+        "data": AccessData().get_categories(),
+    }, 200

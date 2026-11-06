@@ -28,3 +28,9 @@ export interface Product extends NewProduct {
   id: number;
   activo: boolean;
 }
+
+// One row of GET /api/v1/products
+export interface ProductListItem extends Product {
+  categoria: string | null;
+  existencia: number; // calculated from movements, in unidad_base
+}

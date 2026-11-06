@@ -36,7 +36,7 @@ class AccessData:
 
     def get_user_by_email(self, email):
         """Devuelve el usuario como dict, o None si no existe."""
-        query = "SELECT users, nombre, rol, email, password_hash FROM users WHERE email = %(email)s"
+        query = "SELECT users, nombre, rol, email, password_hash, activo FROM users WHERE email = %(email)s"
         params = {"email": email}
         with self._connection() as conn:
             with conn.cursor() as cursor:
@@ -44,9 +44,10 @@ class AccessData:
                 return cursor.fetchone()
 
     def user_exists(self, email, password):
-        """True si existe un usuario con ese correo y la contraseña coincide."""
+        """True si existe un usuario activo con ese correo y la contraseña coincide."""
         user = self.get_user_by_email(email)
-        if user is None:
+        # HU-30: an inactive user cannot log in
+        if user is None or not user["activo"]:
             return False
         # Passwords are stored as SHA256 hex for now
         password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -55,6 +56,14 @@ class AccessData:
     # ------------------------------------------------------------
     # Catalog: products and categories
     # ------------------------------------------------------------
+
+    def get_categories(self):
+        """Devuelve todas las categorías ordenadas por nombre."""
+        query = "SELECT id, nombre FROM categories ORDER BY nombre"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
 
     def category_exists(self, category_id):
         """True si existe una categoría con ese id."""
@@ -71,6 +80,27 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query, {"codigo": codigo})
                 return cursor.fetchone() is not None
+
+    def get_products(self):
+        """Devuelve todos los productos con su categoría y su existencia actual.
+
+        La existencia no se guarda en products: se calcula con los movimientos
+        (las entradas suman; venta, daño y uso restan).
+        """
+        query = """
+            SELECT p.id, p.codigo, p.nombre, p.precio, p.unidad_base, p.stock_minimo, p.activo,
+                   p.categoria_id, c.nombre AS categoria,
+                   COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0) AS existencia
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            LEFT JOIN movements m ON m.producto_id = p.id
+            GROUP BY p.id, c.nombre
+            ORDER BY p.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
 
     def get_product_by_id(self, product_id):
         """Devuelve el producto como dict, o None si no existe."""
