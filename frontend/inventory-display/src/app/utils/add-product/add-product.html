@@ -20,161 +20,125 @@
         }
     </script>
 </head>
-<body class="bg-black-900 min-h-screen">
+<div class="min-h-screen bg-gray-400">
 
-    <!-- Sidebar was here... -->
-
-    <!-- Main Content -->
-    <div class="bg-gray-400">
-
-        <!-- Top Header -->
-        <header class="bg-white shadow-sm border-b border-gray-200">
-            <div class="px-6 py-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-2xl font-semibold text-gray-900">Agregar Producto</h1>
-                        <p class="text-gray-600 text-sm mt-1">Registrar un producto nuevo al catalago</p>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <div class="relative">
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-
-        <!-- Main Dashboard Content -->
-        <main class="p-6">
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-
-            </div>
-
-            <!-- Charts Row -->
-            <div class=" gap-6 mb-8">
-                <!-- Revenue Chart -->
-                <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Catalogo de Productos</h3>
-                        </div>
-                    </div>
-                    <div class="h-80">
-                        <canvas id="revenueChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Top Products -->
-            </div>
-
-            <!-- Recent Orders Table -->
-
-            <!-- Bottom Row -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- System Status -->
-            </div>
-        </main>
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-900">Agregar Producto</h1>
+        <p class="text-gray-600 text-sm mt-1">Registrar un producto nuevo al catálogo</p>
+      </div>
+      <a routerLink="/content/products"
+         class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        Volver a productos
+      </a>
     </div>
+  </header>
 
-    <script>
-        // Initialize Chart.js with Cordes styling
-        const ctx = document.getElementById('revenueChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                datasets: [{
-                    label: 'Revenue',
-                    data: [25000, 32000, 28000, 35000, 42000, 48000],
-                    borderColor: '#1e40af',
-                    backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#1e40af',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    pointRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            color: '#6b7280'
-                        }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: '#f3f4f6'
-                        },
-                        ticks: {
-                            color: '#6b7280',
-                            callback: function(value) {
-                                return ' + value.toLocaleString();
-                            }
-                        }
-                    }
-                },
-                elements: {
-                    point: {
-                        hoverRadius: 8
-                    }
-                }
+  <main class="p-6">
+    <div class="max-w-3xl bg-white rounded-xl shadow-sm border border-gray-200">
+
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">Datos del producto</h3>
+        <p class="text-gray-600 text-sm">Los campos con * son obligatorios</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="save()" class="p-6 space-y-6">
+        @if (created()) {
+          <div class="px-4 py-3 rounded-lg bg-green-100 text-green-800 text-sm font-medium">
+            Producto creado: {{ created() }}
+          </div>
+        }
+        @if (error()) {
+          <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">
+            {{ error() }}
+          </div>
+        }
+
+        <!-- Código y nombre -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label for="codigo" class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
+            <input id="codigo" type="text" formControlName="codigo" placeholder="CLA-003"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            @if (invalid('codigo')) {
+              <p class="mt-1 text-xs text-red-600">El código es obligatorio (máx. 30 caracteres)</p>
             }
-        });
+          </div>
 
-        // Add some interactive functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            // Sidebar navigation active state
-            const navLinks = document.querySelectorAll('nav a');
-            navLinks.forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    navLinks.forEach(l => l.classList.remove('bg-gray-700', 'text-white'));
-                    navLinks.forEach(l => l.classList.add('text-gray-300'));
-                    this.classList.add('bg-gray-700', 'text-white');
-                    this.classList.remove('text-gray-300');
-                });
-            });
-
-            // Set dashboard as active by default
-            navLinks[0].classList.add('bg-gray-700', 'text-white');
-            navLinks[0].classList.remove('text-gray-300');
-
-            // Notification bell animation
-            const bellIcon = document.querySelector('.fa-bell');
-            if (bellIcon) {
-                setInterval(() => {
-                    bellIcon.classList.add('animate-pulse');
-                    setTimeout(() => {
-                        bellIcon.classList.remove('animate-pulse');
-                    }, 1000);
-                }, 5000);
+          <div class="md:col-span-2">
+            <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <input id="nombre" type="text" formControlName="nombre" placeholder="Clavo de 3 pulgadas"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            @if (invalid('nombre')) {
+              <p class="mt-1 text-xs text-red-600">El nombre es obligatorio (máx. 100 caracteres)</p>
             }
+          </div>
+        </div>
 
-            // Stats cards hover effects
-            const statsCards = document.querySelectorAll('.hover\\:shadow-md');
-            statsCards.forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-2px)';
-                });
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
-        });
-    </script>
-</body>
+        <!-- Precio, unidad y categoría -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label for="precio" class="block text-sm font-medium text-gray-700 mb-1">Precio (Q) *</label>
+            <input id="precio" type="number" formControlName="precio" min="0" step="0.01" placeholder="0.00"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            @if (invalid('precio')) {
+              <p class="mt-1 text-xs text-red-600">Ingrese un precio de 0 o más</p>
+            }
+          </div>
+
+          <div>
+            <label for="unidad_base" class="block text-sm font-medium text-gray-700 mb-1">Se vende por *</label>
+            <select id="unidad_base" formControlName="unidad_base"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              @for (unidad of unidades; track unidad.value) {
+                <option [value]="unidad.value">{{ unidad.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div>
+            <label for="categoria_id" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+            <select id="categoria_id" formControlName="categoria_id"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              <option [ngValue]="null">Sin categoría</option>
+              @for (category of categories(); track category.id) {
+                <option [ngValue]="category.id">{{ category.nombre }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <!-- Stock mínimo -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label for="stock_minimo" class="block text-sm font-medium text-gray-700 mb-1">Stock mínimo</label>
+            <input id="stock_minimo" type="number" formControlName="stock_minimo" min="0" [step]="stockStep"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            @if (invalid('stock_minimo')) {
+              <p class="mt-1 text-xs text-red-600">No puede ser negativo</p>
+            }
+          </div>
+          <p class="md:col-span-2 self-end text-sm text-gray-500">
+            Cuando la existencia llegue a este número, el producto aparece en "Lo que se está acabando".
+            Si lo deja vacío, el producto no genera alertas.
+          </p>
+        </div>
+
+        <!-- Botones -->
+        <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <a routerLink="/content/products"
+             class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </a>
+          <button type="submit" [disabled]="saving()"
+                  class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
+            {{ saving() ? 'Guardando...' : 'Guardar producto' }}
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </main>
+</div>
