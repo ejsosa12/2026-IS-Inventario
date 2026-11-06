@@ -38,7 +38,7 @@ There is no backend test suite. Endpoints are checked ad hoc with `create_app().
 - Optional unique strings (e.g. `suppliers.nit`) must be stored as `NULL` when empty, never `''`, so the UNIQUE constraint allows several blanks.
 
 ### Database
-`backend/query.sql` holds the schema (C4 level 4 data model) and seed data. Keep it in sync when the schema changes. The DB user lacks CREATE privileges, so the user runs DDL (`ALTER TABLE`, etc.) themselves; provide the query instead of executing it.
+`backend/query.sql` holds the schema (C4 level 4 data model) and seed data. Keep it in sync when the schema changes. `backend/inventory_dump.sql` is a full `mariadb-dump` of the `inventory` DB with dummy data (drops and recreates every table); it is a snapshot, not the source of truth for the schema. The DB user lacks CREATE privileges, so the user runs DDL (`ALTER TABLE`, etc.) themselves; provide the query instead of executing it.
 - `users` PK column is named `users` (not `id`). Passwords are stored as SHA256 hex.
 - **Stock is never stored**: existencia = SUM over `movements` (`entrada` adds; `venta`, `dano`, `uso` subtract), always in the product's `unidad_base` (`unidad` integers only; `lb`/`m` allow decimals, HU-07).
 - `presentations` convert purchase units to base units (1 caja = 50 lb).
@@ -46,7 +46,7 @@ There is no backend test suite. Endpoints are checked ad hoc with `create_app().
 - `stock_minimo` NULL means the product generates no low-stock alerts (HU-21).
 
 ### Frontend (Angular 22, standalone components, signals)
-- `app.routes.ts`: `home` (guarded by `publicGuard`, holds `login`) and `content` (guarded by `authGuard`). `content` renders the `SideBar` plus a `<router-outlet>`; feature pages are its lazy-loaded children (`dashboard`, `products`, `products/add-product`, `suppliers`, `suppliers/add-supplier`, ...).
+- `app.routes.ts`: `home` (guarded by `publicGuard`, holds `login`) and `content` (guarded by `authGuard`). `content` renders the `SideBar` plus a `<router-outlet>`; feature pages are its lazy-loaded children (`dashboard`, `settings`, `products`, `products/add-product`, `suppliers`, `suppliers/add-supplier`).
 - `core/services/auth-service.ts` keeps the JWT in localStorage and a signal. `isAuthenticated()` decodes the token's `exp` client-side and logs out when it has expired.
 - `core/services/auth-interceptor.ts` (functional interceptor registered in `app.config.ts`) adds the Bearer token to every request except login, and on any 401 logs out and redirects to `/home/login`. Components therefore do not handle 401, only 0/403/409 and the like.
 - `core/services/data-services.ts` `DataServices` wraps all non-auth API calls and maps `response.data`. Response and entity interfaces live in `models/`, mirroring the Flask JSON.
