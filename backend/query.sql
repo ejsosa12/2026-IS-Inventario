@@ -140,3 +140,17 @@ INSERT INTO presentations (producto_id, nombre, factor) VALUES
 	((SELECT id FROM products WHERE codigo = 'MAN-050'), 'rollo', 30),
 	((SELECT id FROM products WHERE codigo = 'CAB-012'), 'rollo', 100),
 	((SELECT id FROM products WHERE codigo = 'TOR-158'), 'caja', 100);
+
+-- ============================================================
+-- Datos de ejemplo: proveedores (HU-09)
+-- Nombres y teléfonos inventados
+-- ============================================================
+
+INSERT INTO suppliers (nombre, telefono) VALUES
+	('Distribuidora Ferretera del Norte', '2234-5678'),
+	('Clavos y Alambres La Fragua', '2456-7890'),
+	('Plomería y Riego San Miguel', '5512-3344'),
+	('Cementos y Agregados El Volcán', '7765-4321'),
+	('Eléctrica Industrial Centro', '2298-1100'),
+	-- Sin teléfono: telefono acepta NULL
+	('Herramientas Don Chepe', NULL);
