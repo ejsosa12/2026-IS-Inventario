@@ -86,24 +86,52 @@ create table presentations(
 	FOREIGN KEY(producto_id) REFERENCES products(id)
 );
 
--- HU-11, HU-15, HU-16, HU-17, HU-28
+-- HU-11: encabezado de una factura de compra (los productos van en movements)
+create table entries(
+	id int AUTO_INCREMENT not null,
+	proveedor_id int not null,
+	numero_factura varchar(30) not null,
+	-- Fecha impresa en la factura (puede ser de ayer)
+	fecha_factura date not null,
+	-- Cuándo se registró en el sistema y quién (HU-11)
+	fecha datetime not null default current_timestamp,
+	usuario_id int not null,
+	PRIMARY KEY(id),
+	-- La misma factura del mismo proveedor no se ingresa dos veces
+	UNIQUE(proveedor_id, numero_factura),
+	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),
+	FOREIGN KEY(usuario_id) REFERENCES users(users)
+);
+
+-- HU-11, HU-12, HU-15, HU-16, HU-17, HU-28
 -- Todo cambio de existencia pasa por aquí
 create table movements(
 	id int AUTO_INCREMENT not null,
 	tipo enum('entrada', 'venta', 'dano', 'uso') not null,
-	-- Siempre en unidad base y siempre positiva: el tipo dice si suma o resta
+	-- Siempre en unidad base y siempre positiva: el tipo dice si suma o resta.
+	-- En una entrada es lo que llegó de verdad (HU-12)
 	cantidad decimal(10,3) not null check (cantidad > 0),
-	-- Precio por unidad base en ese momento. NULL en daño y uso interno
-	precio decimal(10,2) check (precio >= 0),
+	-- HU-12: lo que dice la factura, en unidad base. Si no coincide con
+	-- cantidad, la entrada sale en "entradas con faltantes". NULL fuera de entradas
+	cantidad_factura decimal(10,3) check (cantidad_factura >= 0),
+	-- Precio por unidad base en ese momento. NULL en daño y uso interno.
+	-- 4 decimales: Q100 el rollo de 30 m = Q3.3333 por metro
+	precio decimal(12,4) check (precio >= 0),
 	fecha datetime not null default current_timestamp,
 	producto_id int not null,
 	usuario_id int not null,
 	-- Solo las entradas tienen proveedor
 	proveedor_id int,
+	-- HU-11: factura a la que pertenece. NULL fuera de entradas
+	entrada_id int,
+	-- HU-06: en qué presentación llegó (caja, rollo). NULL = en unidad base
+	presentacion_id int,
 	PRIMARY KEY(id),
 	FOREIGN KEY(producto_id) REFERENCES products(id),
 	FOREIGN KEY(usuario_id) REFERENCES users(users),
-	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id)
+	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),
+	FOREIGN KEY(entrada_id) REFERENCES entries(id),
+	FOREIGN KEY(presentacion_id) REFERENCES presentations(id)
 );
 
 -- ============================================================
