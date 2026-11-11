@@ -3,6 +3,7 @@ import { inject, Service } from '@angular/core';
 import { map } from 'rxjs';
 import { ApiResponse, Category, NewProduct, Product, ProductListItem } from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
+import { Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
 @Service()
@@ -38,5 +39,32 @@ export class DataServices {
     return this.http
       .post<ApiResponse<Supplier>>(`${this.API_URL}/add-supplier`, supplier)
       .pipe(map((response) => response.data as Supplier));
+  }
+
+  getPresentations() {
+    return this.http
+      .get<ApiResponse<Presentation[]>>(`${this.API_URL}/presentations`)
+      .pipe(map((response) => response.data ?? []));
+  }
+
+  // HU-11 and HU-12: one invoice with all its products
+  addEntry(entry: NewEntry) {
+    return this.http
+      .post<ApiResponse<Entry>>(`${this.API_URL}/add-entry`, entry)
+      .pipe(map((response) => response.data as Entry));
+  }
+
+  // onlyWithShortages = HU-12 list of "entradas con faltantes"
+  getEntries(onlyWithShortages = false) {
+    const params = onlyWithShortages ? { faltantes: 'true' } : undefined;
+    return this.http
+      .get<ApiResponse<EntryListItem[]>>(`${this.API_URL}/entries`, { params })
+      .pipe(map((response) => response.data ?? []));
+  }
+
+  getEntry(id: number) {
+    return this.http
+      .get<ApiResponse<Entry>>(`${this.API_URL}/entries/${id}`)
+      .pipe(map((response) => response.data as Entry));
   }
 }
