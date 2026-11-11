@@ -65,6 +65,18 @@ class AccessData:
                 cursor.execute(query)
                 return cursor.fetchall()
 
+    def get_presentations(self):
+        """Devuelve todas las presentaciones (HU-06: 1 caja = 50 lb)."""
+        query = """
+            SELECT id, producto_id, nombre, factor
+            FROM presentations
+            ORDER BY producto_id, factor
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
     def category_exists(self, category_id):
         """True si existe una categoría con ese id."""
         query = "SELECT 1 FROM categories WHERE id = %(id)s"
@@ -178,3 +190,124 @@ class AccessData:
                 new_id = cursor.lastrowid
             conn.commit()
             return new_id
+
+    # ------------------------------------------------------------
+    # Entries (HU-11, HU-12): an invoice header in entries,
+    # one 'entrada' movement per product
+    # ------------------------------------------------------------
+
+    def get_presentation_by_id(self, presentation_id):
+        """Devuelve la presentación como dict, o None si no existe."""
+        query = "SELECT id, producto_id, nombre, factor FROM presentations WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": presentation_id})
+                return cursor.fetchone()
+
+    def entry_exists(self, proveedor_id, numero_factura):
+        """True si esa factura de ese proveedor ya fue ingresada."""
+        query = """
+            SELECT 1 FROM entries
+            WHERE proveedor_id = %(proveedor_id)s AND numero_factura = %(numero_factura)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"proveedor_id": proveedor_id, "numero_factura": numero_factura})
+                return cursor.fetchone() is not None
+
+    def add_entry(self, proveedor_id, numero_factura, fecha_factura, usuario_id, items):
+        """Guarda la factura y un movimiento 'entrada' por producto. Todo o nada.
+
+        items: dicts with producto_id, presentacion_id, cantidad, cantidad_factura and precio,
+        already converted to the base unit.
+        Lanza pymysql.err.IntegrityError si la factura ya existe.
+        """
+        entry_query = """
+            INSERT INTO entries (proveedor_id, numero_factura, fecha_factura, usuario_id)
+            VALUES (%(proveedor_id)s, %(numero_factura)s, %(fecha_factura)s, %(usuario_id)s)
+        """
+        movement_query = """
+            INSERT INTO movements (tipo, cantidad, cantidad_factura, precio, producto_id,
+                                   usuario_id, proveedor_id, entrada_id, presentacion_id)
+            VALUES ('entrada', %(cantidad)s, %(cantidad_factura)s, %(precio)s, %(producto_id)s,
+                    %(usuario_id)s, %(proveedor_id)s, %(entrada_id)s, %(presentacion_id)s)
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(entry_query, {
+                        "proveedor_id": proveedor_id,
+                        "numero_factura": numero_factura,
+                        "fecha_factura": fecha_factura,
+                        "usuario_id": usuario_id,
+                    })
+                    entry_id = cursor.lastrowid
+                    for item in items:
+                        cursor.execute(movement_query, {
+                            **item,
+                            "usuario_id": usuario_id,
+                            "proveedor_id": proveedor_id,
+                            "entrada_id": entry_id,
+                        })
+                conn.commit()
+            except Exception:
+                # If one product fails, the invoice is not saved half done
+                conn.rollback()
+                raise
+            return entry_id
+
+    def get_entries(self, only_with_shortages=False):
+        """Devuelve las facturas ingresadas, la más reciente primero.
+
+        con_faltantes is 1 when some product arrived in a different quantity than the invoice (HU-12).
+        """
+        query = """
+            SELECT e.id, e.numero_factura, e.fecha_factura, e.fecha,
+                   e.proveedor_id, s.nombre AS proveedor,
+                   e.usuario_id, u.nombre AS usuario,
+                   COUNT(m.id) AS total_productos,
+                   MAX(m.cantidad_factura <> m.cantidad) AS con_faltantes
+            FROM entries e
+            JOIN suppliers s ON s.id = e.proveedor_id
+            JOIN users u ON u.users = e.usuario_id
+            LEFT JOIN movements m ON m.entrada_id = e.id
+            GROUP BY e.id, s.nombre, u.nombre
+        """
+        if only_with_shortages:
+            query += " HAVING con_faltantes = 1"
+        query += " ORDER BY e.fecha DESC, e.id DESC"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
+    def get_entry_by_id(self, entry_id):
+        """Devuelve la factura con sus productos, o None si no existe."""
+        entry_query = """
+            SELECT e.id, e.numero_factura, e.fecha_factura, e.fecha,
+                   e.proveedor_id, s.nombre AS proveedor,
+                   e.usuario_id, u.nombre AS usuario
+            FROM entries e
+            JOIN suppliers s ON s.id = e.proveedor_id
+            JOIN users u ON u.users = e.usuario_id
+            WHERE e.id = %(id)s
+        """
+        items_query = """
+            SELECT m.id, m.producto_id, p.codigo, p.nombre, p.unidad_base,
+                   m.presentacion_id, pr.nombre AS presentacion, pr.factor,
+                   m.cantidad, m.cantidad_factura, m.precio
+            FROM movements m
+            JOIN products p ON p.id = m.producto_id
+            LEFT JOIN presentations pr ON pr.id = m.presentacion_id
+            WHERE m.entrada_id = %(id)s
+            ORDER BY m.id
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(entry_query, {"id": entry_id})
+                entry = cursor.fetchone()
+                if entry is None:
+                    return None
+                cursor.execute(items_query, {"id": entry_id})
+                entry["productos"] = cursor.fetchall()
+                return entry

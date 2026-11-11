@@ -24,9 +24,11 @@ def create_app():
     from .auth import auth_user
     from .catalog import catalog
     from .suppliers import suppliers
+    from .movements import movements
 
     app.register_blueprint(auth_user, url_prefix='/')
     app.register_blueprint(catalog, url_prefix='/')
     app.register_blueprint(suppliers, url_prefix='/')
+    app.register_blueprint(movements, url_prefix='/')
 
     return app

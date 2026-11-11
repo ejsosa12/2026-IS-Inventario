@@ -131,3 +131,18 @@ def get_categories():
         "message": "SUCCESS: categories",
         "data": AccessData().get_categories(),
     }, 200
+
+
+@catalog.route('api/v1/presentations', methods=['GET'])
+@requiere_rol()  # any logged-in user (HU-11: employees pick the presentation when receiving)
+def get_presentations():
+    # HU-06: how each product is bought. Angular filters them by producto_id
+    presentations = [
+        {**presentation, "factor": float(presentation["factor"])}
+        for presentation in AccessData().get_presentations()
+    ]
+    return {
+        "status": 0,
+        "message": "SUCCESS: presentations",
+        "data": presentations,
+    }, 200
