@@ -47,6 +47,9 @@ export const routes: Routes = [
       {
         path: 'entries', loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)
       },
+      {
+        path: 'entries-list', loadComponent: () => import('./utils/entries-list/entries-list').then(el => el.EntriesList)
+      },
     ]
   },
 

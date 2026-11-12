@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cordes-blue': '#1e40af',
+                        'cordes-dark': '#1e293b',
+                        'cordes-light': '#f8fafc',
+                        'cordes-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+
+<!-- h-screen + flex: the page takes exactly the screen height and the list fills the rest -->
+<div class="h-screen flex flex-col bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-900">Entradas registradas</h1>
+        <p class="text-gray-600 text-sm mt-1">Facturas ingresadas y mercadería que llegó incompleta</p>
+      </div>
+      <a routerLink="/content/entries"
+         class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg hover:bg-slate-800 transition-colors">
+        Ingresar mercadería
+      </a>
+    </div>
+  </header>
+
+  <main class="flex-1 min-h-0 flex flex-col p-6">
+    <div class="flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-semibold text-gray-900">
+          {{ onlyShortages() ? 'Entradas con faltantes' : 'Todas las entradas' }}
+        </h3>
+        <!-- HU-12: list of entries with shortages -->
+        <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" [checked]="onlyShortages()"
+                 (change)="setOnlyShortages($any($event.target).checked)"
+                 class="w-4 h-4 accent-blue-800">
+          <span>Solo con faltantes</span>
+        </label>
+      </div>
+
+      <div class="flex-1 min-h-0">
+        <div class="h-full overflow-auto border border-gray-200 rounded-lg">
+          @if (loading()) {
+            <p class="p-6 text-sm text-gray-500">Cargando entradas...</p>
+          } @else if (error()) {
+            <p class="m-4 px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</p>
+          } @else if (entries().length === 0) {
+            <p class="p-6 text-sm text-gray-500">
+              {{ onlyShortages() ? 'No hay entradas con faltantes.' : 'Todavía no hay entradas registradas.' }}
+            </p>
+          } @else {
+            <table class="w-full">
+              <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Factura</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha factura</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresada</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productos</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                @for (entry of entries(); track entry.id) {
+                  <tr (click)="toggle(entry)" class="cursor-pointer hover:bg-gray-50"
+                      [class.bg-blue-50]="openId() === entry.id">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <span class="inline-block w-4 text-gray-400">{{ openId() === entry.id ? '▾' : '▸' }}</span>
+                      {{ entry.numero_factura }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.proveedor }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ invoiceDate(entry.fecha_factura) }}</td>
+                    <!-- HU-11: when and who -->
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900">{{ entry.fecha | date: 'dd/MM/yyyy HH:mm' }}</div>
+                      <div class="text-sm text-gray-500">{{ entry.usuario }}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.total_productos }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      @if (entry.con_faltantes) {
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                          Con faltantes
+                        </span>
+                      } @else {
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                          Completa
+                        </span>
+                      }
+                    </td>
+                  </tr>
+
+                  <!-- Products of the opened entry -->
+                  @if (openId() === entry.id) {
+                    <tr>
+                      <td colspan="6" class="px-6 py-4 bg-gray-50">
+                        @if (detailLoading()) {
+                          <p class="text-sm text-gray-500">Cargando productos...</p>
+                        } @else if (detail(); as detail) {
+                          <table class="w-full bg-white border border-gray-200 rounded-lg">
+                            <thead>
+                              <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                <th class="px-4 py-2">Producto</th>
+                                <th class="px-4 py-2">En factura</th>
+                                <th class="px-4 py-2">Recibido</th>
+                                <th class="px-4 py-2">Diferencia</th>
+                                <th class="px-4 py-2">Precio c/u</th>
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                              @for (item of detail.productos; track item.id) {
+                                <tr class="text-sm" [class.bg-yellow-50]="item.faltante">
+                                  <td class="px-4 py-2">
+                                    <div class="font-medium text-gray-900">{{ item.nombre }}</div>
+                                    <div class="text-gray-500">{{ item.codigo }}</div>
+                                  </td>
+                                  <td class="px-4 py-2 text-gray-900">
+                                    {{ item.cantidad_factura_presentacion | number: '1.0-3' }} {{ unit(item) }}
+                                  </td>
+                                  <td class="px-4 py-2 text-gray-900">
+                                    {{ item.cantidad_presentacion | number: '1.0-3' }} {{ unit(item) }}
+                                    @if (item.presentacion) {
+                                      <span class="text-gray-500">
+                                        = {{ item.cantidad | number: '1.0-3' }} {{ unidadLabel[item.unidad_base] }}
+                                      </span>
+                                    }
+                                  </td>
+                                  <td class="px-4 py-2">
+                                    @if (item.faltante) {
+                                      <span class="font-semibold text-yellow-800">
+                                        {{ difference(item) > 0 ? 'Faltan' : 'Sobran' }}
+                                        {{ (difference(item) > 0 ? difference(item) : -difference(item)) | number: '1.0-3' }}
+                                        {{ unit(item) }}
+                                      </span>
+                                    } @else {
+                                      <span class="text-gray-500">—</span>
+                                    }
+                                  </td>
+                                  <td class="px-4 py-2 text-gray-900">
+                                    Q {{ item.precio_presentacion | number: '1.2-2' }}
+                                    <span class="text-gray-500">/ {{ unit(item) }}</span>
+                                  </td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        }
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

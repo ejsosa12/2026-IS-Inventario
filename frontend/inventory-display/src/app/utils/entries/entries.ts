@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
 import { NewEntry, NewEntryItem, Presentation } from '../../models/entry';
 import { ProductListItem, UnidadBase } from '../../models/product';
@@ -30,7 +31,7 @@ function today(): string {
 }
 
 @Component({
-  imports: [ReactiveFormsModule, DecimalPipe],
+  imports: [ReactiveFormsModule, DecimalPipe, RouterLink],
   selector: 'app-entries',
   templateUrl: './entries.html',
 })
