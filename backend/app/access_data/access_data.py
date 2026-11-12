@@ -126,14 +126,21 @@ class AccessData:
                 cursor.execute(query, {"id": product_id})
                 return cursor.fetchone()
 
-    def add_product(self, codigo, nombre, precio, unidad_base, stock_minimo=None, categoria_id=None):
-        """Inserta un producto nuevo (siempre activo) y devuelve su id.
+    def add_product(self, codigo, nombre, precio, unidad_base, stock_minimo=None, categoria_id=None,
+                    presentaciones=None):
+        """Inserta un producto nuevo (siempre activo) con sus presentaciones y devuelve su id.
 
+        presentaciones: list of {"nombre", "factor"} (HU-06). Product and presentations are
+        saved together: if one fails, nothing is saved.
         Lanza pymysql.err.IntegrityError si el código ya existe.
         """
-        query = """
+        product_query = """
             INSERT INTO products (codigo, nombre, precio, unidad_base, stock_minimo, activo, categoria_id)
             VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(unidad_base)s, %(stock_minimo)s, true, %(categoria_id)s)
+        """
+        presentation_query = """
+            INSERT INTO presentations (producto_id, nombre, factor)
+            VALUES (%(producto_id)s, %(nombre)s, %(factor)s)
         """
         params = {
             "codigo": codigo,
@@ -144,11 +151,30 @@ class AccessData:
             "categoria_id": categoria_id,
         }
         with self._connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, params)
-                new_id = cursor.lastrowid
-            conn.commit()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(product_query, params)
+                    new_id = cursor.lastrowid
+                    for presentation in presentaciones or []:
+                        cursor.execute(presentation_query, {**presentation, "producto_id": new_id})
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
             return new_id
+
+    def get_presentations_by_product(self, product_id):
+        """Devuelve las presentaciones de un producto, de la más chica a la más grande."""
+        query = """
+            SELECT id, producto_id, nombre, factor
+            FROM presentations
+            WHERE producto_id = %(id)s
+            ORDER BY factor
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": product_id})
+                return cursor.fetchall()
 
     # ------------------------------------------------------------
     # Suppliers

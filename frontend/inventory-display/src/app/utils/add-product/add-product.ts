@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
-import { Category, NewProduct, UnidadBase } from '../../models/product';
+import { Category, NewPresentation, NewProduct, UnidadBase } from '../../models/product';
 
 @Component({
   imports: [ReactiveFormsModule, RouterLink],
@@ -25,6 +25,17 @@ export class AddProduct {
   error = signal<string | null>(null);
   created = signal<string | null>(null);
 
+  // Plural names for the "1 caja = 50 lb" hint
+  private readonly unidadPlural: Record<UnidadBase, string> = { unidad: 'unidades', lb: 'lb', m: 'm' };
+
+  // HU-06: one row of "Se compra en"
+  private presentationGroup() {
+    return this.fb.group({
+      nombre: ['', [Validators.required, Validators.maxLength(30)]],
+      factor: [null as number | null, [Validators.required, Validators.min(0.001)]],
+    });
+  }
+
   form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(30)]],
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
@@ -32,7 +43,35 @@ export class AddProduct {
     unidad_base: ['unidad' as UnidadBase, Validators.required],
     stock_minimo: [null as number | null, Validators.min(0)],
     categoria_id: [null as number | null],
+    presentaciones: this.fb.array<ReturnType<AddProduct['presentationGroup']>>([]),
   });
+
+  get presentations() {
+    return this.form.controls.presentaciones;
+  }
+
+  addPresentation() {
+    this.presentations.push(this.presentationGroup());
+  }
+
+  removePresentation(index: number) {
+    this.presentations.removeAt(index);
+  }
+
+  // "1 caja = 50 lb" next to each row
+  equivalence(index: number): string | null {
+    const { nombre, factor } = this.presentations.at(index).getRawValue();
+    if (!factor || factor <= 0) {
+      return null;
+    }
+    const unidad = this.form.controls.unidad_base.value ?? 'unidad';
+    return `1 ${nombre?.trim() || 'presentación'} = ${factor} ${this.unidadPlural[unidad]}`;
+  }
+
+  presentationInvalid(index: number, field: 'nombre' | 'factor'): boolean {
+    const control = this.presentations.at(index).controls[field];
+    return control.invalid && (control.touched || control.dirty);
+  }
 
   constructor() {
     this.dataServices.getCategories().subscribe({
@@ -69,6 +108,21 @@ export class AddProduct {
       return;
     }
 
+    // HU-06: same rules Flask checks, but here the user sees them right away
+    const presentaciones: NewPresentation[] = value.presentaciones.map((p) => ({
+      nombre: p.nombre!.trim(),
+      factor: p.factor!,
+    }));
+    const names = presentaciones.map((p) => p.nombre.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      this.error.set('Hay dos presentaciones con el mismo nombre');
+      return;
+    }
+    if (value.unidad_base === 'unidad' && presentaciones.some((p) => !Number.isInteger(p.factor))) {
+      this.error.set('Para productos por unidad, cada presentación debe traer un número entero de unidades');
+      return;
+    }
+
     const product: NewProduct = {
       codigo: value.codigo!.trim(),
       nombre: value.nombre!.trim(),
@@ -76,6 +130,7 @@ export class AddProduct {
       unidad_base: value.unidad_base!,
       stock_minimo: value.stock_minimo ?? null,
       categoria_id: value.categoria_id ?? null,
+      presentaciones,
     };
 
     this.saving.set(true);
@@ -84,6 +139,7 @@ export class AddProduct {
         this.saving.set(false);
         this.created.set(`${created.codigo} · ${created.nombre}`);
         this.form.reset({ unidad_base: 'unidad' });
+        this.presentations.clear();
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);

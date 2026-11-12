@@ -13,6 +13,12 @@ export interface Category {
   nombre: string;
 }
 
+// HU-06: how the product is bought. "caja" with factor 50 = 1 caja holds 50 lb
+export interface NewPresentation {
+  nombre: string;
+  factor: number; // how many base units it holds
+}
+
 // What the form sends to POST /api/v1/add-product
 export interface NewProduct {
   codigo: string;
@@ -21,6 +27,7 @@ export interface NewProduct {
   unidad_base: UnidadBase;
   stock_minimo: number | null; // null = no alerts (HU-21)
   categoria_id: number | null;
+  presentaciones?: NewPresentation[]; // optional, empty = bought in the base unit
 }
 
 // What Flask returns after creating it

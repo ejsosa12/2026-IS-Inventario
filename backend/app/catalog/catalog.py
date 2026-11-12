@@ -38,6 +38,51 @@ def _product_to_json(product):
     }
 
 
+def _presentation_to_json(presentation):
+    return {**presentation, "factor": float(presentation["factor"])}
+
+
+def _validate_presentations(raw, unidad_base):
+    """HU-06: checks the "1 caja = 50 lb" list of a new product.
+
+    Returns (presentations, None) when it is fine or (None, error response) when it is not.
+    """
+    if raw in (None, []):
+        return [], None
+    if not isinstance(raw, list):
+        return None, _error("presentaciones must be a list")
+
+    presentations = []
+    seen = set()
+    for position, item in enumerate(raw, start=1):
+        prefix = f"presentacion {position}: "
+        if not isinstance(item, dict):
+            return None, _error(prefix + "invalid data")
+
+        nombre = str(item.get("nombre") or "").strip()
+        if not nombre:
+            return None, _error(prefix + "nombre is required")
+        if len(nombre) > 30:
+            return None, _error(prefix + "nombre must have at most 30 characters")
+        # Same rule as UNIQUE(producto_id, nombre), but "Caja" and "caja" also count as repeated
+        if nombre.lower() in seen:
+            return None, _error(prefix + f"'{nombre}' is repeated")
+        seen.add(nombre.lower())
+
+        factor = _to_decimal(item.get("factor"))
+        if factor is None or factor <= 0:
+            return None, _error(prefix + "factor must be greater than 0")
+        # decimal(10,3): up to 3 decimals and less than 10 million
+        if factor != factor.quantize(Decimal("0.001")) or factor >= Decimal("10000000"):
+            return None, _error(prefix + "factor can have at most 3 decimals")
+        # HU-07: a box of a product sold by unit holds a whole number of units
+        if unidad_base == "unidad" and factor != factor.to_integral_value():
+            return None, _error(prefix + "factor must be a whole number for products sold by unidad")
+
+        presentations.append({"nombre": nombre, "factor": factor})
+    return presentations, None
+
+
 @catalog.route('api/v1/add-product', methods=['POST'])
 @requiere_rol('admin')  # HU-29: only the owner manages the catalog
 def add_product():
@@ -84,6 +129,11 @@ def add_product():
         if unidad_base == 'unidad' and stock_minimo != stock_minimo.to_integral_value():
             return _error("stock_minimo must be a whole number for products sold by unidad")
 
+    # HU-06: optional, how the product is bought ("1 caja = 50 lb")
+    presentaciones, error = _validate_presentations(body.get("presentaciones"), unidad_base)
+    if error:
+        return error
+
     access = AccessData()
 
     # categoria_id is optional, but if it comes it must exist
@@ -97,7 +147,9 @@ def add_product():
         return _error(f"a product with codigo '{codigo}' already exists", 409)
 
     try:
-        new_id = access.add_product(codigo, nombre, precio, unidad_base, stock_minimo, categoria_id)
+        new_id = access.add_product(
+            codigo, nombre, precio, unidad_base, stock_minimo, categoria_id, presentaciones
+        )
     except pymysql.err.IntegrityError:
         # Two requests with the same codigo at the same time: the UNIQUE in the table stops the second one
         return _error(f"a product with codigo '{codigo}' already exists", 409)
@@ -105,7 +157,12 @@ def add_product():
     return {
         "status": 0,
         "message": "SUCCESS: product created",
-        "data": _product_to_json(access.get_product_by_id(new_id)),
+        "data": {
+            **_product_to_json(access.get_product_by_id(new_id)),
+            "presentaciones": [
+                _presentation_to_json(p) for p in access.get_presentations_by_product(new_id)
+            ],
+        },
     }, 201
 
 
@@ -137,10 +194,7 @@ def get_categories():
 @requiere_rol()  # any logged-in user (HU-11: employees pick the presentation when receiving)
 def get_presentations():
     # HU-06: how each product is bought. Angular filters them by producto_id
-    presentations = [
-        {**presentation, "factor": float(presentation["factor"])}
-        for presentation in AccessData().get_presentations()
-    ]
+    presentations = [_presentation_to_json(p) for p in AccessData().get_presentations()]
     return {
         "status": 0,
         "message": "SUCCESS: presentations",
