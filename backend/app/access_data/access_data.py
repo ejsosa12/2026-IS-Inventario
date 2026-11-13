@@ -7,6 +7,14 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 
+class InsufficientStock(Exception):
+    """HU-18: an output asks for more than what there is. existencia is what there is."""
+
+    def __init__(self, existencia):
+        super().__init__(f"only {existencia} in stock")
+        self.existencia = existencia
+
+
 class AccessData:
     """Acceso a la base de datos MySQL local.
 
@@ -434,3 +442,78 @@ class AccessData:
                 cursor.execute(items_query, {"id": entry_id})
                 entry["productos"] = cursor.fetchall()
                 return entry
+
+    # ------------------------------------------------------------
+    # Outputs (HU-16 merma; HU-17 uso interno later; sales come from billing, see
+    # facturación-conditions.txt). HU-18: never leave the stock below zero
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _lock_stock(cursor, producto_id):
+        """HU-18: locks the product row until commit and returns its current stock.
+
+        Two people taking the last 5 sacks at the same time: the second one waits here
+        and then sees the stock the first one left. Must run inside a transaction.
+        Reusable by any outgoing movement (merma, uso interno, ventas).
+        """
+        cursor.execute("SELECT id FROM products WHERE id = %(id)s FOR UPDATE", {"id": producto_id})
+        cursor.execute("""
+            SELECT COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END), 0)
+                   AS existencia
+            FROM movements
+            WHERE producto_id = %(id)s
+        """, {"id": producto_id})
+        return cursor.fetchone()["existencia"]
+
+    def add_output(self, tipo, producto_id, cantidad, motivo, usuario_id):
+        """Guarda una salida ('dano' o 'uso') y devuelve su id.
+
+        cantidad is already in the base unit. Lanza InsufficientStock si no alcanza (HU-18).
+        """
+        query = """
+            INSERT INTO movements (tipo, cantidad, motivo, producto_id, usuario_id)
+            VALUES (%(tipo)s, %(cantidad)s, %(motivo)s, %(producto_id)s, %(usuario_id)s)
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    existencia = self._lock_stock(cursor, producto_id)
+                    if cantidad > existencia:
+                        raise InsufficientStock(existencia)
+                    cursor.execute(query, {
+                        "tipo": tipo, "cantidad": cantidad, "motivo": motivo,
+                        "producto_id": producto_id, "usuario_id": usuario_id,
+                    })
+                    output_id = cursor.lastrowid
+                conn.commit()
+            except Exception:
+                # Also releases the lock
+                conn.rollback()
+                raise
+            return output_id
+
+    OUTPUT_SELECT = """
+        SELECT m.id, m.tipo, m.cantidad, m.motivo, m.fecha,
+               m.producto_id, p.codigo, p.nombre AS producto, p.unidad_base,
+               m.usuario_id, u.nombre AS usuario
+        FROM movements m
+        JOIN products p ON p.id = m.producto_id
+        JOIN users u ON u.users = m.usuario_id
+    """
+
+    def get_outputs(self, tipos, limit=100):
+        """Devuelve las últimas salidas de esos tipos, la más reciente primero."""
+        placeholders = ", ".join(["%s"] * len(tipos))
+        query = self.OUTPUT_SELECT + f"WHERE m.tipo IN ({placeholders}) ORDER BY m.fecha DESC, m.id DESC LIMIT %s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, (*tipos, limit))
+                return cursor.fetchall()
+
+    def get_output_by_id(self, output_id):
+        """Devuelve una salida, o None si no existe."""
+        query = self.OUTPUT_SELECT + "WHERE m.id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": output_id})
+                return cursor.fetchone()

@@ -4,6 +4,7 @@ import { map } from 'rxjs';
 import { ApiResponse, Category, NewProduct, Product, ProductListItem } from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
+import { NewOutput, Output } from '../../models/output';
 import { Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
@@ -60,6 +61,19 @@ export class DataServices {
     return this.http
       .put<ApiResponse<Supplier>>(`${this.API_URL}/supplier-status/${id}`, { activo })
       .pipe(map((response) => response.data as Supplier));
+  }
+
+  // HU-16: stock that leaves without being sold (merma). A 409 means not enough stock (HU-18)
+  addOutput(output: NewOutput) {
+    return this.http
+      .post<ApiResponse<Output>>(`${this.API_URL}/add-output`, output)
+      .pipe(map((response) => response.data as Output));
+  }
+
+  getOutputs() {
+    return this.http
+      .get<ApiResponse<Output[]>>(`${this.API_URL}/outputs`)
+      .pipe(map((response) => response.data ?? []));
   }
 
   // HU-30: user management (owner only)

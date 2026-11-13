@@ -4,7 +4,7 @@ from decimal import Decimal
 from flask import Blueprint, g, request
 import pymysql
 
-from app.access_data import AccessData
+from app.access_data import AccessData, InsufficientStock
 from app.catalog.catalog import _to_decimal
 from app.security import requiere_rol
 
@@ -200,4 +200,86 @@ def get_entry(entry_id):
         "status": 0,
         "message": "SUCCESS: entry",
         "data": _entry_to_json(entry),
+    }, 200
+
+
+# ------------------------------------------------------------
+# Outputs: stock that leaves without being sold.
+# HU-16 merma ('dano'). HU-17 will add 'uso' here. Sales come from billing.
+# ------------------------------------------------------------
+
+OUTPUT_TYPES = ("dano",)
+
+
+def _output_to_json(output):
+    return {
+        **output,
+        "cantidad": float(output["cantidad"]),
+        "fecha": output["fecha"].isoformat(),
+    }
+
+
+@movements.route('api/v1/add-output', methods=['POST'])
+@requiere_rol()  # HU-16: Kevin and Byron register the broken product
+def add_output():
+    body = request.get_json(silent=True)
+    if not body:
+        return _error("output data is required")
+
+    tipo = body.get("tipo", "dano")
+    if tipo not in OUTPUT_TYPES:
+        return _error("tipo is not valid")
+
+    producto_id = body.get("producto_id")
+    if not isinstance(producto_id, int) or isinstance(producto_id, bool):
+        return _error("producto_id is required")
+
+    # HU-16: the reason is required (the DB also checks it)
+    motivo = str(body.get("motivo") or "").strip()
+    if not motivo:
+        return _error("motivo is required")
+    if len(motivo) > 200:
+        return _error("motivo must have at most 200 characters")
+
+    # Always in the base unit (lb, m or unidad)
+    cantidad = _to_decimal(body.get("cantidad"))
+    if cantidad is None or cantidad <= 0:
+        return _error("cantidad must be greater than 0")
+    if cantidad != cantidad.quantize(CANTIDAD_DECIMALES):
+        return _error("cantidad must have at most 3 decimals")
+
+    access = AccessData()
+    product = access.get_product_by_id(producto_id)
+    if product is None:
+        return _error("product does not exist", 404)
+    if not product["activo"]:
+        return _error("product is not active")
+    # HU-07: products sold by unit only take whole numbers
+    if product["unidad_base"] == "unidad" and cantidad != cantidad.to_integral_value():
+        return _error("products sold by unit only accept whole quantities")
+
+    try:
+        output_id = access.add_output(tipo, producto_id, cantidad, motivo, g.user["users"])
+    except InsufficientStock as error:
+        # HU-18: Angular shows "Solo hay 5 en existencia" with this number
+        return {
+            "status": 1,
+            "message": "insufficient stock",
+            "data": {"existencia": float(error.existencia)},
+        }, 409
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: output created",
+        "data": _output_to_json(access.get_output_by_id(output_id)),
+    }, 201
+
+
+@movements.route('api/v1/outputs', methods=['GET'])
+@requiere_rol()  # any logged-in user
+def get_outputs():
+    return {
+        "status": 0,
+        "message": "SUCCESS: outputs",
+        "data": [_output_to_json(o) for o in AccessData().get_outputs(OUTPUT_TYPES)],
     }, 200
