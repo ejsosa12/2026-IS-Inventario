@@ -146,8 +146,12 @@ def add_entry():
         return _error("at least one product is required")
 
     access = AccessData()
-    if access.get_supplier_by_id(proveedor_id) is None:
+    supplier = access.get_supplier_by_id(proveedor_id)
+    if supplier is None:
         return _error("supplier does not exist", 404)
+    # HU-09: a deactivated supplier does not receive new invoices
+    if not supplier["activo"]:
+        return _error("supplier is not active")
     if access.entry_exists(proveedor_id, numero_factura):
         return _error("this invoice from this supplier was already entered", 409)
 

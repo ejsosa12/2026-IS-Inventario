@@ -41,6 +41,26 @@ export class DataServices {
       .pipe(map((response) => response.data as Supplier));
   }
 
+  getSupplier(id: number) {
+    return this.http
+      .get<ApiResponse<Supplier>>(`${this.API_URL}/suppliers/${id}`)
+      .pipe(map((response) => response.data as Supplier));
+  }
+
+  // HU-09: edit the supplier data (not its status)
+  editSupplier(id: number, supplier: NewSupplier) {
+    return this.http
+      .put<ApiResponse<Supplier>>(`${this.API_URL}/edit-supplier/${id}`, supplier)
+      .pipe(map((response) => response.data as Supplier));
+  }
+
+  // HU-09: deactivate (activo false) or reactivate a supplier
+  setSupplierStatus(id: number, activo: boolean) {
+    return this.http
+      .put<ApiResponse<Supplier>>(`${this.API_URL}/supplier-status/${id}`, { activo })
+      .pipe(map((response) => response.data as Supplier));
+  }
+
   getPresentations() {
     return this.http
       .get<ApiResponse<Presentation[]>>(`${this.API_URL}/presentations`)

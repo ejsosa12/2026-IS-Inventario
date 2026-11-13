@@ -46,6 +46,10 @@ export const routes: Routes = [
         path: 'suppliers/add-supplier', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
       },
       {
+        // HU-09: same form as add-supplier, filled with the supplier
+        path: 'suppliers/edit-supplier/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
+      },
+      {
         path: 'entries', loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)
       },
       {

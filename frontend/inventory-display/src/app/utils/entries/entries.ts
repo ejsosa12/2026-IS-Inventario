@@ -52,6 +52,9 @@ export class Entries {
   error = signal<string | null>(null);
   created = signal<string | null>(null);
 
+  // HU-09: a deactivated supplier does not receive new invoices
+  activeSuppliers = computed(() => this.suppliers().filter((supplier) => supplier.activo));
+
   // HU-04: products taken off the catalog do not receive stock
   activeProducts = computed(() => this.products().filter((product) => product.activo));
 

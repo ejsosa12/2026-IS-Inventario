@@ -57,8 +57,12 @@ create table suppliers(
 	id int AUTO_INCREMENT not null,
 	nombre varchar(100) not null,
 	telefono varchar(20),
+	-- Nombre del vendedor o contacto (opcional)
+	contacto varchar(100),
 	-- Opcional. Si se pone, no puede repetirse (varios NULL sí se permiten)
 	nit varchar(20),
+	-- Desactivar sin borrar: sus entradas viejas lo siguen usando
+	activo boolean not null default true,
 	PRIMARY KEY(id),
 	UNIQUE(nit)
 );

@@ -180,9 +180,11 @@ class AccessData:
     # Suppliers
     # ------------------------------------------------------------
 
+    SUPPLIER_COLUMNS = "id, nombre, telefono, contacto, nit, activo"
+
     def get_suppliers(self):
-        """Devuelve todos los proveedores ordenados por nombre."""
-        query = "SELECT id, nombre, telefono, nit FROM suppliers ORDER BY nombre"
+        """Devuelve todos los proveedores (activos e inactivos) ordenados por nombre."""
+        query = f"SELECT {self.SUPPLIER_COLUMNS} FROM suppliers ORDER BY nombre"
         with self._connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query)
@@ -190,32 +192,66 @@ class AccessData:
 
     def get_supplier_by_id(self, supplier_id):
         """Devuelve el proveedor como dict, o None si no existe."""
-        query = "SELECT id, nombre, telefono, nit FROM suppliers WHERE id = %(id)s"
+        query = f"SELECT {self.SUPPLIER_COLUMNS} FROM suppliers WHERE id = %(id)s"
         with self._connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, {"id": supplier_id})
                 return cursor.fetchone()
 
-    def supplier_nit_exists(self, nit):
-        """True si ya hay un proveedor con ese NIT."""
-        query = "SELECT 1 FROM suppliers WHERE nit = %(nit)s"
+    def supplier_nit_exists(self, nit, exclude_id=None):
+        """True si ya hay otro proveedor con ese NIT.
+
+        exclude_id: al editar, el propio proveedor no cuenta como repetido.
+        """
+        query = "SELECT 1 FROM suppliers WHERE nit = %(nit)s AND id <> %(exclude_id)s"
         with self._connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(query, {"nit": nit})
+                cursor.execute(query, {"nit": nit, "exclude_id": exclude_id or 0})
                 return cursor.fetchone() is not None
 
-    def add_supplier(self, nombre, telefono=None, nit=None):
+    def add_supplier(self, nombre, telefono=None, nit=None, contacto=None):
         """Inserta un proveedor nuevo y devuelve su id.
 
         Lanza pymysql.err.IntegrityError si el NIT ya existe.
         """
-        query = "INSERT INTO suppliers (nombre, telefono, nit) VALUES (%(nombre)s, %(telefono)s, %(nit)s)"
+        query = """
+            INSERT INTO suppliers (nombre, telefono, contacto, nit)
+            VALUES (%(nombre)s, %(telefono)s, %(contacto)s, %(nit)s)
+        """
         with self._connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(query, {"nombre": nombre, "telefono": telefono, "nit": nit})
+                cursor.execute(query, {
+                    "nombre": nombre, "telefono": telefono, "contacto": contacto, "nit": nit,
+                })
                 new_id = cursor.lastrowid
             conn.commit()
             return new_id
+
+    def update_supplier(self, supplier_id, nombre, telefono=None, nit=None, contacto=None):
+        """HU-09: edita los datos del proveedor (no su estado).
+
+        Lanza pymysql.err.IntegrityError si el NIT ya existe.
+        """
+        query = """
+            UPDATE suppliers
+            SET nombre = %(nombre)s, telefono = %(telefono)s, contacto = %(contacto)s, nit = %(nit)s
+            WHERE id = %(id)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {
+                    "id": supplier_id, "nombre": nombre, "telefono": telefono,
+                    "contacto": contacto, "nit": nit,
+                })
+            conn.commit()
+
+    def set_supplier_active(self, supplier_id, activo):
+        """HU-09: desactiva (o reactiva) un proveedor sin borrar sus entradas."""
+        query = "UPDATE suppliers SET activo = %(activo)s WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": supplier_id, "activo": activo})
+            conn.commit()
 
     # ------------------------------------------------------------
     # Entries (HU-11, HU-12): an invoice header in entries,
