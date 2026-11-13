@@ -50,6 +50,13 @@ export const routes: Routes = [
         path: 'suppliers/edit-supplier/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
       },
       {
+        // HU-30: only the owner manages users
+        path: 'users', canActivate: [adminGuard], loadComponent: () => import('./utils/users/users').then(u => u.Users)
+      },
+      {
+        path: 'users/add-user', canActivate: [adminGuard], loadComponent: () => import('./utils/add-user/add-user').then(a => a.AddUser)
+      },
+      {
         path: 'entries', loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)
       },
       {

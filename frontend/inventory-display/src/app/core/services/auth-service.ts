@@ -56,7 +56,8 @@ export class AuthService {
   private payload = computed(() => decodeToken(this._token()));
 
   // HU-29: who is logged in. A token from before this change has no rol, so it counts as employee
-  nombre = computed(() => this.payload()?.nombre ?? this.payload()?.email ?? '');
+  email = computed(() => this.payload()?.email ?? '');
+  nombre = computed(() => this.payload()?.nombre ?? this.email());
   rol = computed<Rol>(() => this.payload()?.rol ?? 'employee');
   isAdmin = computed(() => this.rol() === 'admin');
 

@@ -17,7 +17,7 @@
       </a>
       <!-- HU-29: managing users is only for the owner -->
       @if (isAdmin()) {
-        <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+        <a routerLink="/content/users" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
                            transition-colors group">
           <i class="fas fa-users mr-3 text-white group-hover:text-white"></i>
           Usuarios

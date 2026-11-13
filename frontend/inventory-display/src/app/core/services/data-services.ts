@@ -3,6 +3,7 @@ import { inject, Service } from '@angular/core';
 import { map } from 'rxjs';
 import { ApiResponse, Category, NewProduct, Product, ProductListItem } from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
+import { NewUser, User } from '../../models/user';
 import { Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
@@ -59,6 +60,31 @@ export class DataServices {
     return this.http
       .put<ApiResponse<Supplier>>(`${this.API_URL}/supplier-status/${id}`, { activo })
       .pipe(map((response) => response.data as Supplier));
+  }
+
+  // HU-30: user management (owner only)
+  getUsers() {
+    return this.http
+      .get<ApiResponse<User[]>>(`${this.API_URL}/users`)
+      .pipe(map((response) => response.data ?? []));
+  }
+
+  addUser(user: NewUser) {
+    return this.http
+      .post<ApiResponse<User>>(`${this.API_URL}/add-user`, user)
+      .pipe(map((response) => response.data as User));
+  }
+
+  changeUserPassword(id: number, password: string) {
+    return this.http
+      .put<ApiResponse<User>>(`${this.API_URL}/user-password/${id}`, { password })
+      .pipe(map((response) => response.data as User));
+  }
+
+  setUserStatus(id: number, activo: boolean) {
+    return this.http
+      .put<ApiResponse<User>>(`${this.API_URL}/user-status/${id}`, { activo })
+      .pipe(map((response) => response.data as User));
   }
 
   getPresentations() {
