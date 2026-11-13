@@ -49,9 +49,70 @@ class AccessData:
         # HU-30: an inactive user cannot log in
         if user is None or not user["activo"]:
             return False
-        # Passwords are stored as SHA256 hex for now
-        password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        return hmac.compare_digest(password_hash, user["password_hash"])
+        return hmac.compare_digest(self.hash_password(password), user["password_hash"])
+
+    @staticmethod
+    def hash_password(password):
+        """Passwords are stored as SHA256 hex for now (same as the seed users in query.sql)."""
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    # ------------------------------------------------------------
+    # Users (HU-30): the owner manages who can log in
+    # ------------------------------------------------------------
+
+    # Never send password_hash to the client. The PK column is "users", sent as "id"
+    USER_COLUMNS = "users AS id, nombre, rol, email, activo"
+
+    def get_users(self):
+        """Devuelve todos los usuarios (activos e inactivos) sin su contraseña."""
+        query = f"SELECT {self.USER_COLUMNS} FROM users ORDER BY nombre"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
+    def get_user_by_id(self, user_id):
+        """Devuelve el usuario sin su contraseña, o None si no existe."""
+        query = f"SELECT {self.USER_COLUMNS} FROM users WHERE users = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": user_id})
+                return cursor.fetchone()
+
+    def add_user(self, nombre, email, rol, password):
+        """Inserta un usuario nuevo y devuelve su id.
+
+        Lanza pymysql.err.IntegrityError si el correo ya existe.
+        """
+        query = """
+            INSERT INTO users (nombre, rol, email, password_hash)
+            VALUES (%(nombre)s, %(rol)s, %(email)s, %(password_hash)s)
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {
+                    "nombre": nombre, "rol": rol, "email": email,
+                    "password_hash": self.hash_password(password),
+                })
+                new_id = cursor.lastrowid
+            conn.commit()
+            return new_id
+
+    def set_user_password(self, user_id, password):
+        """HU-30: el dueño le pone una contraseña nueva a un usuario."""
+        query = "UPDATE users SET password_hash = %(password_hash)s WHERE users = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": user_id, "password_hash": self.hash_password(password)})
+            conn.commit()
+
+    def set_user_active(self, user_id, activo):
+        """HU-30: desactiva (o reactiva) un usuario. Sus movimientos se conservan."""
+        query = "UPDATE users SET activo = %(activo)s WHERE users = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": user_id, "activo": activo})
+            conn.commit()
 
     # ------------------------------------------------------------
     # Catalog: products and categories
