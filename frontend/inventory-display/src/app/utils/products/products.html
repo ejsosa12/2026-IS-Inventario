@@ -39,17 +39,14 @@
                     </div>
                     <div class="flex items-center space-x-4">
 
-                        <div>
-                           <a href="content/products/add-product">
-                            <i class="text-purple-600"></i>
-                            <button type="button"
-                              class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg
-                                     hover:bg-slate-800 disabled:opacity-60 transition-colors">
-                                      Agregar Producto
-                            </button>
-
+                        <!-- HU-29: only the owner adds products (and sets their price) -->
+                        @if (isAdmin()) {
+                          <a routerLink="add-product"
+                             class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg
+                                    hover:bg-slate-800 transition-colors">
+                            Agregar Producto
                           </a>
-                        </div>
+                        }
 
 
                     </div>

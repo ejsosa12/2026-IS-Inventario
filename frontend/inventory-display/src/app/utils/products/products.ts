@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
 import { ProductListItem, UnidadBase } from '../../models/product';
 
@@ -9,12 +11,15 @@ interface Estado {
 }
 
 @Component({
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, RouterLink],
   selector: 'app-products',
   templateUrl: './products.html',
 })
 export class Products {
   private dataServices = inject(DataServices);
+
+  // HU-29: the "Agregar" button is only for the owner
+  isAdmin = inject(AuthService).isAdmin;
 
   products = signal<ProductListItem[]>([]);
   loading = signal(true);

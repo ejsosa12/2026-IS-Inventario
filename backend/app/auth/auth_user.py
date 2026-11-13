@@ -49,8 +49,13 @@ def login():
     expires_in = int(os.getenv("JWT_EXPIRES_IN", 1)) 
     now = datetime.now(timezone.utc)
 
+    user = AccessData().get_user_by_email(email)
     payload = {
         "email": email,
+        # HU-29: Angular reads these to hide what the employee cannot use.
+        # Only for the UI: requiere_rol reloads the role from the DB on every request
+        "nombre": user["nombre"],
+        "rol": user["rol"],
         "iat": now,
         "exp": now + timedelta(hours=expires_in),
     }

@@ -1,6 +1,31 @@
 import { HttpClient } from '@angular/common/http';
-import { inject, Service, signal } from '@angular/core';
+import { computed, inject, Service, signal } from '@angular/core';
 import { tap } from 'rxjs';
+
+export type Rol = 'admin' | 'employee';
+
+// What Flask puts inside the JWT (backend/app/auth/auth_user.py)
+interface TokenPayload {
+  email: string;
+  nombre?: string;
+  rol?: Rol;
+  exp: number;
+}
+
+// Reads the JWT payload. Only for the UI: Flask is the one that verifies the signature
+function decodeToken(token: string | null): TokenPayload | null {
+  if (!token) {
+    return null;
+  }
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    // atob gives bytes; TextDecoder turns them back into UTF-8 ("José" and not "JosÃ©")
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null; // malformed token = invalid
+  }
+}
 
 export interface LoginRequest {
   email: string;
@@ -28,6 +53,13 @@ export class AuthService {
   loading = this._loading.asReadonly();
   error = this._error.asReadonly();
 
+  private payload = computed(() => decodeToken(this._token()));
+
+  // HU-29: who is logged in. A token from before this change has no rol, so it counts as employee
+  nombre = computed(() => this.payload()?.nombre ?? this.payload()?.email ?? '');
+  rol = computed<Rol>(() => this.payload()?.rol ?? 'employee');
+  isAdmin = computed(() => this.rol() === 'admin');
+
   // A method, not a computed: a computed would not re-run just because time passed
   isAuthenticated(): boolean {
     const token = this._token();
@@ -43,13 +75,11 @@ export class AuthService {
 
   // Reads "exp" from the JWT payload. This is only for UX: Flask is the one that verifies the signature
   private isTokenExpired(token: string): boolean {
-    try {
-      const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(atob(base64));
-      return Date.now() >= payload.exp * 1000; // exp comes in seconds
-    } catch {
+    const payload = decodeToken(token);
+    if (!payload) {
       return true; // malformed token = invalid
     }
+    return Date.now() >= payload.exp * 1000; // exp comes in seconds
   }
 
   login(credentials: LoginRequest) {

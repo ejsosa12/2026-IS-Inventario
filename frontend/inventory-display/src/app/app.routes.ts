@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { publicGuard } from './core/guards/public-guard';
 import { authGuard } from './core/guards/auth-guard';
+import { adminGuard } from './core/guards/admin-guard';
 
 export const routes: Routes = [
    //Home page
@@ -36,13 +37,13 @@ export const routes: Routes = [
         path: 'products', loadComponent: () => import('./utils/products/products').then(p => p.Products)
       },
       {
-        path: 'products/add-product', loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
+        path: 'products/add-product', canActivate: [adminGuard], loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
       },
       {
         path: 'suppliers', loadComponent: () => import('./utils/suppliers/suppliers').then(s => s.Suppliers)
       },
       {
-        path: 'suppliers/add-supplier', loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
+        path: 'suppliers/add-supplier', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
       },
       {
         path: 'entries', loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)

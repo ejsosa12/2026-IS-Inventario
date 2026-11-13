@@ -39,13 +39,14 @@
                     </div>
                     <div class="flex items-center space-x-4">
 
-                        <div>
+                        <!-- HU-29: only the owner adds suppliers -->
+                        @if (isAdmin()) {
                           <a routerLink="add-supplier"
                              class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg
                                     hover:bg-slate-800 transition-colors">
                             Agregar Proveedor
                           </a>
-                        </div>
+                        }
 
 
                     </div>

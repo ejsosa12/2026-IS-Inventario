@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
 import { Supplier } from '../../models/supplier';
 
@@ -10,6 +11,9 @@ import { Supplier } from '../../models/supplier';
 })
 export class Suppliers {
   private dataServices = inject(DataServices);
+
+  // HU-29: the "Agregar" button is only for the owner
+  isAdmin = inject(AuthService).isAdmin;
 
   suppliers = signal<Supplier[]>([]);
   loading = signal(true);

@@ -10,37 +10,43 @@
 
   <nav class="mt-8 px-4">
     <div class="space-y-2">
-      <a href="#" class="flex items-center px-4
+      <a routerLink="/content/dashboard" class="flex items-center px-4
                          py-3 text-white hover:bg-gray-700 hover:text-white rounded-lg transition-colors group">
         <i class="fas fa-home mr-3 text-cordes-accent group-hover:text-white"></i>
         Dashboard
       </a>
-      <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
-                         transition-colors group">
-        <i class="fas fa-users mr-3 text-white group-hover:text-white"></i>
-        Usuarios
-      </a>
-      <a href="content/products" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+      <!-- HU-29: managing users is only for the owner -->
+      @if (isAdmin()) {
+        <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+                           transition-colors group">
+          <i class="fas fa-users mr-3 text-white group-hover:text-white"></i>
+          Usuarios
+        </a>
+      }
+      <a routerLink="/content/products" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
                          transition-colors group">
         <i class="fas fa-box mr-3 text-white group-hover:text-white"></i>
         Productos
       </a>
-      <a href="content/suppliers" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+      <a routerLink="/content/suppliers" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
                          transition-colors group">
         <i class="fa fa-industry mr-3 text-white group-hover:text-white"></i>
         Proveedores
       </a>
-      <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
-        transition-colors group">
-        <i class="fas fa-chart-bar mr-3 text-white group-hover:text-white"></i>
-        Analísis
-      </a>
-      <a href="content/entries" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+      <!-- HU-29: money reports are only for the owner -->
+      @if (isAdmin()) {
+        <a href="#" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
+          transition-colors group">
+          <i class="fas fa-chart-bar mr-3 text-white group-hover:text-white"></i>
+          Analísis
+        </a>
+      }
+      <a routerLink="/content/entries" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg
                          transition-colors group">
         <i class="fa-solid fa-plus mr-3 text-white group-hover:text-white"></i>
         Ingresar Mercaderia
       </a>
-      <a href="content/settings" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700
+      <a routerLink="/content/settings" class="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-700
         hover:text-white rounded-lg transition-colors group">
         <i class="fas fa-cog mr-3 text-white group-hover:text-white"></i>
         Ajustes
@@ -51,11 +57,11 @@
   <div class="absolute bottom-4 left-4 right-4">
     <div class="bg-gray-800 rounded-lg p-4">
       <div class="flex items-center space-x-3">
-        <img src="https://cdn-icons-png.flaticon.com/512/17003/17003310.png" alt="Admin"
+        <img src="https://cdn-icons-png.flaticon.com/512/17003/17003310.png" alt="Usuario"
         class="w-10 h-10 rounded-full">
         <div>
-          <p class="text-white text-sm font-medium">John Admin</p>
-          <p class="text-gray-400 text-xs">Administrator</p>
+          <p class="text-white text-sm font-medium">{{ nombre() }}</p>
+          <p class="text-gray-400 text-xs">{{ isAdmin() ? 'Dueño' : 'Empleado' }}</p>
           <a href="#" (click)="logout()" class="mt-4 text-white text-sm font-medium hover:bg-blue-500">Cerrar Sesión</a>
         </div>
       </div>
