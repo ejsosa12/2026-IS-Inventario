@@ -1,0 +1,68 @@
+CONDICIONES PARA CONECTAR EL MÓDULO DE FACTURACIÓN CON EL INVENTARIO
+Acordado el 2026-11-13 · Ferretería El Buen Clavo
+
+----------------------------------------------------------------------
+1. Qué se pospone
+----------------------------------------------------------------------
+- La HU-15 (Sacar lo que se vendió) NO se hace en este inventario.
+  Las ventas ocurren en otro proyecto, el módulo de facturación, que
+  avisará al API de Flask para que la existencia baje.
+- Se espera a confirmar que el módulo de facturación esté listo.
+- El resto de la EP-05 sí se hace aquí, porque no pasa por facturación:
+    HU-16  Producto dañado (merma con motivo)
+    HU-17  Uso interno (con para qué se usó)
+    HU-18  No dejar sacar más de lo que hay (aplica a las tres)
+- La validación de existencia de la HU-18 se debe construir de forma que
+  la ruta de ventas la pueda reutilizar después.
+
+----------------------------------------------------------------------
+2. Lo que hay que acordar con el módulo de facturación
+----------------------------------------------------------------------
+2.1 Autenticación
+    Facturación no es una persona. Necesita una llave de servicio
+    (API key) o un usuario de sistema para llamar al API. Aun así, cada
+    venta debe indicar qué cajero la hizo (HU-28: quién hizo qué).
+
+2.2 Identificación del producto
+    Se usa el código del producto (products.codigo, ej. CEM-042),
+    compartido entre los dos sistemas.
+
+2.3 No descontar dos veces
+    Si facturación reintenta el envío (por ejemplo, por un error de red),
+    la venta no debe restar la existencia otra vez. Se usa el número de
+    factura como valor único, igual que UNIQUE(proveedor_id,
+    numero_factura) en las entradas. Una factura repetida responde 409.
+
+2.4 Existencia insuficiente (HU-18)
+    Facturación consulta la existencia ANTES de facturar. El inventario
+    de todas formas valida y rechaza la venta si no alcanza, con el
+    mensaje "Solo hay N en existencia".
+
+2.5 Precio
+    El precio de venta se administra en el inventario (HU-02, solo el
+    dueño). Facturación lo lee de aquí, o manda el precio con el que
+    vendió para guardarlo en movements.precio. Falta decidir cuál.
+
+2.6 Anulaciones y devoluciones
+    Si facturación anula una factura o emite una nota de crédito, el
+    inventario debe devolver la existencia. Se cruza con la HU-13
+    (devolución de un cliente) y con las anulaciones de la HU-29, que
+    son solo del dueño.
+
+----------------------------------------------------------------------
+3. Qué queda incompleto mientras no lleguen las ventas
+----------------------------------------------------------------------
+- HU-24  Lo que más se vende: depende por completo de las ventas.
+- HU-25  Lo que no se mueve: mide la falta de ventas.
+- HU-20  Kárdex: funciona, pero sin ventas solo muestra entradas,
+         mermas y uso interno. Se completa solo cuando lleguen,
+         porque todo sale de la tabla movements.
+
+----------------------------------------------------------------------
+4. Lo que ya está listo en el inventario para recibirlas
+----------------------------------------------------------------------
+- movements.tipo ya acepta 'venta'.
+- La existencia se calcula restando todo lo que no es 'entrada', así
+  que las ventas bajan la existencia sin cambiar las consultas.
+- movements.precio guarda el precio por unidad base en ese momento
+  (4 decimales).

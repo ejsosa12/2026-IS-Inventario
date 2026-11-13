@@ -49,6 +49,7 @@ There is no backend test suite. Endpoints are checked ad hoc with `create_app().
 - `suppliers` has `nombre` (required), optional `telefono`, `contacto` (seller name) and `nit` (UNIQUE), and `activo`.
 - Soft delete via `activo` on `products` (HU-04: inactive products are hidden from searches), `suppliers` (HU-09: still listed, greyed out, but cannot receive new invoices; old entries keep pointing to them) and `users` (HU-30: inactive users cannot log in).
 - `stock_minimo` NULL means the product generates no low-stock alerts (HU-21).
+- Sales (HU-15) are NOT built here: they will come from a separate billing project ("módulo de facturación") through the Flask API. The rest of EP-05 (HU-16 merma, HU-17 uso interno, HU-18 stock validation) is built here, one story at a time, and the HU-18 check must be reusable by a future sales route. What was agreed for that integration (auth, product `codigo`, idempotent invoice number, price owner, cancellations) is in `facturación-conditions.txt` at the repo root; read it before touching sales.
 - Known gap: there is no product editing yet, so presentations cannot be added to an existing product (postponed until editing exists). HU-07 mentions galón, but `unidad_base` only has `unidad`, `lb`, `m`; and stock only goes up (no sales or other outgoing movements yet).
 
 ### Frontend (Angular 22, standalone components, signals)
