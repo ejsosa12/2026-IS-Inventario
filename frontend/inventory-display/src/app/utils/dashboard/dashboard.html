@@ -488,25 +488,70 @@
             <!-- HU-22: list of minimum stock and out of stock. Out of stock first, then furthest from the minimum -->
             @if (lowStock().length) {
                 <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Productos a agotarse</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Productos a agotarse</h3>
+                        <!-- HU-05: filter by category -->
+                        <select aria-label="Filtrar por categoría"
+                                [value]="category()" (change)="category.set($any($event.target).value)"
+                                class="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                            <option value="">Todas las categorías</option>
+                            @for (name of categories(); track name) {
+                                <option [value]="name">{{ name }}</option>
+                            }
+                        </select>
+                    </div>
                     <div class="overflow-auto border border-gray-200 rounded-lg">
                         <table class="w-full">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Existencia</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mínimo</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faltan</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                    <!-- Click a title to sort by it (asc, desc, back to normal) -->
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('nombre')">
+                                        <button type="button" (click)="sortBy('nombre')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Producto <i [class]="sortIcon('nombre')"></i>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('categoria')">
+                                        <button type="button" (click)="sortBy('categoria')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Categoría <i [class]="sortIcon('categoria')"></i>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('existencia')">
+                                        <button type="button" (click)="sortBy('existencia')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Existencia <i [class]="sortIcon('existencia')"></i>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('stock_minimo')">
+                                        <button type="button" (click)="sortBy('stock_minimo')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Mínimo <i [class]="sortIcon('stock_minimo')"></i>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('faltan')">
+                                        <button type="button" (click)="sortBy('faltan')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Faltan <i [class]="sortIcon('faltan')"></i>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('estado')">
+                                        <button type="button" (click)="sortBy('estado')"
+                                                class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                            Estado <i [class]="sortIcon('estado')"></i>
+                                        </button>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                @for (item of lowStock(); track item.id) {
+                                @for (item of shown(); track item.id) {
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900">{{ item.nombre }}</div>
-                                            <div class="text-sm text-gray-500">{{ item.codigo }} · {{ item.categoria ?? 'Sin categoría' }}</div>
+                                            <div class="text-sm text-gray-500">{{ item.codigo }}</div>
                                         </td>
+                                        <!-- HU-05 -->
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ categoryName(item) }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold"
                                             [class]="item.agotado ? 'text-red-600' : 'text-gray-900'">
                                             {{ amount(item.existencia, item.unidad_base) }}

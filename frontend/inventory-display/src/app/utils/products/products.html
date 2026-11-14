@@ -64,15 +64,27 @@
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900">Catalogo de Productos</h3>
                         </div>
-                        <div class="relative">
-                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2
-                              text-gray-400"></i>
-                            <!-- HU-03: search by part of the name or the code -->
-                            <input type="search" placeholder="Buscar producto..."
-                            [value]="query()" (input)="query.set($any($event.target).value)"
-                            class="pl-10 pr-4 py-2 border
-                            border-gray-300 rounded-lg focus:ring-2 focus:ring-cordes-accent
-                            focus:border-transparent outline-none">
+                        <div class="flex items-center gap-3">
+                            <!-- HU-05: filter by category -->
+                            <select aria-label="Filtrar por categoría"
+                              [value]="category()" (change)="category.set($any($event.target).value)"
+                              class="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2
+                              focus:ring-blue-500 focus:border-transparent outline-none">
+                              <option value="">Todas las categorías</option>
+                              @for (name of categories(); track name) {
+                                <option [value]="name">{{ name }}</option>
+                              }
+                            </select>
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2
+                                  text-gray-400"></i>
+                                <!-- HU-03: search by part of the name or the code -->
+                                <input type="search" placeholder="Buscar producto..."
+                                [value]="query()" (input)="query.set($any($event.target).value)"
+                                class="pl-10 pr-4 py-2 border
+                                border-gray-300 rounded-lg focus:ring-2 focus:ring-cordes-accent
+                                focus:border-transparent outline-none">
+                            </div>
                         </div>
                     </div>
 
@@ -89,36 +101,55 @@
                           <table class="w-full">
                             <thead class="bg-gray-50 sticky top-0">
                               <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Código
+                                <!-- Click a title to sort by it (asc, desc, back to normal) -->
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('codigo')">
+                                  <button type="button" (click)="sortBy('codigo')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Código <i [class]="sortIcon('codigo')"></i>
+                                  </button>
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Producto
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('nombre')">
+                                  <button type="button" (click)="sortBy('nombre')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Producto <i [class]="sortIcon('nombre')"></i>
+                                  </button>
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Precio
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('categoria')">
+                                  <button type="button" (click)="sortBy('categoria')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Categoría <i [class]="sortIcon('categoria')"></i>
+                                  </button>
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Existencia
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('precio')">
+                                  <button type="button" (click)="sortBy('precio')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Precio <i [class]="sortIcon('precio')"></i>
+                                  </button>
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Mínimo
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('existencia')">
+                                  <button type="button" (click)="sortBy('existencia')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Existencia <i [class]="sortIcon('existencia')"></i>
+                                  </button>
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500
-                                  uppercase tracking-wider">
-                                  Estado
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('stock_minimo')">
+                                  <button type="button" (click)="sortBy('stock_minimo')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Mínimo <i [class]="sortIcon('stock_minimo')"></i>
+                                  </button>
+                                </th>
+                                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('estado')">
+                                  <button type="button" (click)="sortBy('estado')"
+                                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                                    Estado <i [class]="sortIcon('estado')"></i>
+                                  </button>
                                 </th>
                                 <th class="px-6 py-3"><span class="sr-only">Acciones</span></th>
                               </tr>
                             </thead>
 
                             <tbody class="bg-white divide-y divide-gray-200">
-                              @for (product of filtered(); track product.id) {
+                              @for (product of shown(); track product.id) {
                                 <tr class="hover:bg-gray-50" [class.opacity-60]="!product.activo">
                                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     {{ product.codigo }}
@@ -127,9 +158,10 @@
                                     <div class="text-sm font-medium text-gray-900">
                                       {{ product.nombre }}
                                     </div>
-                                    <div class="text-sm text-gray-500">
-                                      {{ product.categoria ?? 'Sin categoría' }}
-                                    </div>
+                                  </td>
+                                  <!-- HU-05 -->
+                                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ categoryName(product) }}
                                   </td>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                     Q {{ product.precio | number: '1.2-2' }}
@@ -172,8 +204,12 @@
                                 </tr>
                               } @empty {
                                 <tr>
-                                  <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
-                                    No se encontró ningún producto con "{{ query() }}"
+                                  <td colspan="8" class="px-6 py-8 text-center text-sm text-gray-500">
+                                    @if (query().trim()) {
+                                      No se encontró ningún producto con "{{ query() }}"
+                                    } @else {
+                                      No hay productos en esa categoría
+                                    }
                                   </td>
                                 </tr>
                               }

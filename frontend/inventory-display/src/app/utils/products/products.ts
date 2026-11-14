@@ -4,6 +4,11 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
 import { ProductListItem, UnidadBase } from '../../models/product';
+import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
+
+// Columns that can be sorted by clicking their title
+type ProductSortKey =
+  'codigo' | 'nombre' | 'categoria' | 'precio' | 'existencia' | 'stock_minimo' | 'estado';
 
 interface Estado {
   label: string;
@@ -26,14 +31,29 @@ export class Products {
   error = signal<string | null>(null);
   query = signal('');
 
+  // HU-05: filter by category ('' = all). The options are the categories that have products
+  category = signal('');
+  categories = computed(() =>
+    [...new Set(this.products().map((p) => this.categoryName(p)))].sort((a, b) =>
+      a.localeCompare(b, 'es'),
+    ),
+  );
+
+  // null = the order Flask sent (by name)
+  sort = signal<SortState<ProductSortKey> | null>(null);
+
   // HU-03: every word typed must appear in the name or the code, in any order.
   // "tubo 1/2" finds "Tubo PVC 1/2\" x 6 m". Case and accents do not matter.
   filtered = computed(() => {
     const words = this.normalize(this.query()).split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      return this.products();
-    }
+    const category = this.category();
     return this.products().filter((product) => {
+      if (category && this.categoryName(product) !== category) {
+        return false;
+      }
+      if (words.length === 0) {
+        return true;
+      }
       // HU-04: inactive products do not show up in searches
       if (!product.activo) {
         return false;
@@ -42,6 +62,11 @@ export class Products {
       return words.every((word) => text.includes(word));
     });
   });
+
+  // What the table shows: filtered, then sorted by the clicked column
+  shown = computed(() =>
+    sortList(this.filtered(), this.sort(), (product, key) => this.sortValue(product, key)),
+  );
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
@@ -58,9 +83,43 @@ export class Products {
     });
   }
 
+  sortBy(key: ProductSortKey) {
+    this.sort.update((current) => nextSort(current, key));
+  }
+
+  sortIcon(key: ProductSortKey): string {
+    return sortIcon(this.sort(), key);
+  }
+
+  ariaSort(key: ProductSortKey) {
+    return ariaSort(this.sort(), key);
+  }
+
+  categoryName(product: ProductListItem): string {
+    return product.categoria ?? 'Sin categoría';
+  }
+
+  private sortValue(product: ProductListItem, key: ProductSortKey): string | number | null {
+    switch (key) {
+      case 'categoria':
+        return this.categoryName(product);
+      case 'estado':
+        // Agotado, Por acabarse, Disponible, Inactivo: the urgent ones first
+        return ['Agotado', 'Por acabarse', 'Disponible', 'Inactivo'].indexOf(
+          this.estado(product).label,
+        );
+      default:
+        return product[key];
+    }
+  }
+
   // "Cemento GRIS" -> "cemento gris", "Plomería" -> "plomeria"
   private normalize(text: string): string {
-    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
   }
 
   // HU-04, HU-21, HU-22: the badge on each row
