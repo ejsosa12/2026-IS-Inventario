@@ -73,6 +73,9 @@ export const routes: Routes = [
       {
         path: 'outputs', loadComponent: () => import('./utils/outputs/outputs').then(o => o.Outputs)
       },
+      {
+        path: 'categories', loadComponent: () => import('./utils/categories/categories').then(c => c.Categories)
+      },
     ]
   },
 
