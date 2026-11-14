@@ -127,12 +127,69 @@ class AccessData:
     # ------------------------------------------------------------
 
     def get_categories(self):
-        """Devuelve todas las categorías ordenadas por nombre."""
-        query = "SELECT id, nombre FROM categories ORDER BY nombre"
+        """HU-05: todas las categorías (activas e inactivas) con cuántos productos tiene cada una."""
+        query = """
+            SELECT c.id, c.nombre, c.activo, COUNT(p.id) AS productos
+            FROM categories c
+            LEFT JOIN products p ON p.categoria_id = c.id
+            GROUP BY c.id, c.nombre, c.activo
+            ORDER BY c.nombre
+        """
         with self._connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query)
                 return cursor.fetchall()
+
+    def get_category_by_id(self, category_id):
+        """HU-05: una categoría con su número de productos, o None."""
+        query = """
+            SELECT c.id, c.nombre, c.activo, COUNT(p.id) AS productos
+            FROM categories c
+            LEFT JOIN products p ON p.categoria_id = c.id
+            WHERE c.id = %(id)s
+            GROUP BY c.id, c.nombre, c.activo
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": category_id})
+                return cursor.fetchone()
+
+    def category_name_taken(self, nombre, exclude_id=None):
+        """HU-05: True si otra categoría ya usa ese nombre (sin importar mayúsculas)."""
+        query = """
+            SELECT 1 FROM categories
+            WHERE LOWER(nombre) = LOWER(%(nombre)s) AND (%(exclude)s IS NULL OR id <> %(exclude)s)
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"nombre": nombre, "exclude": exclude_id})
+                return cursor.fetchone() is not None
+
+    def add_category(self, nombre):
+        """HU-05: crea una categoría y devuelve su id. IntegrityError si el nombre ya existe."""
+        query = "INSERT INTO categories (nombre) VALUES (%(nombre)s)"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"nombre": nombre})
+                new_id = cursor.lastrowid
+            conn.commit()
+            return new_id
+
+    def rename_category(self, category_id, nombre):
+        """HU-05: renombra la categoría; sus productos la siguen teniendo."""
+        query = "UPDATE categories SET nombre = %(nombre)s WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": category_id, "nombre": nombre})
+            conn.commit()
+
+    def set_category_active(self, category_id, activo):
+        """HU-05: desactiva (o reactiva) una categoría. Sus productos no cambian."""
+        query = "UPDATE categories SET activo = %(activo)s WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": category_id, "activo": activo})
+            conn.commit()
 
     def get_presentations(self):
         """Devuelve todas las presentaciones (HU-06: 1 caja = 50 lb)."""
@@ -145,14 +202,6 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query)
                 return cursor.fetchall()
-
-    def category_exists(self, category_id):
-        """True si existe una categoría con ese id."""
-        query = "SELECT 1 FROM categories WHERE id = %(id)s"
-        with self._connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, {"id": category_id})
-                return cursor.fetchone() is not None
 
     def product_code_exists(self, codigo):
         """True si ya hay un producto con ese código (activo o no)."""

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -22,6 +22,7 @@ export class AddProduct {
   ];
 
   categories = signal<Category[]>([]);
+  activeCategories = computed(() => this.categories().filter((c) => c.activo));
   saving = signal(false);
   error = signal<string | null>(null);
   created = signal<string | null>(null);
@@ -48,7 +49,8 @@ export class AddProduct {
     precio: [null as number | null, [Validators.required, Validators.min(0)]],
     unidad_base: ['unidad' as UnidadBase, Validators.required],
     stock_minimo: [null as number | null, Validators.min(0)],
-    categoria_id: [null as number | null],
+    // HU-05: every product belongs to a category
+    categoria_id: [null as number | null, Validators.required],
     presentaciones: this.fb.array<ReturnType<AddProduct['presentationGroup']>>([]),
   });
 
@@ -141,7 +143,7 @@ export class AddProduct {
       precio: value.precio!,
       unidad_base: value.unidad_base!,
       stock_minimo: value.stock_minimo ?? null,
-      categoria_id: value.categoria_id ?? null,
+      categoria_id: value.categoria_id!,
       presentaciones,
     };
 

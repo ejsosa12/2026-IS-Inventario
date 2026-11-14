@@ -100,14 +100,20 @@
               }
             </div>
             <div>
-              <label for="categoria_id" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+              <label for="categoria_id" class="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
               <select id="categoria_id" formControlName="categoria_id"
                       class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
-                <option [ngValue]="null">Sin categoría</option>
-                @for (category of categories(); track category.id) {
-                  <option [ngValue]="category.id">{{ category.nombre }}</option>
+                <option [ngValue]="null" disabled>Elegí una categoría</option>
+                <!-- HU-05: active ones, plus its current one if it was deactivated -->
+                @for (category of categoryOptions(); track category.id) {
+                  <option [ngValue]="category.id">
+                    {{ category.nombre }}{{ category.activo ? '' : ' (inactiva)' }}
+                  </option>
                 }
               </select>
+              @if (invalid('categoria_id')) {
+                <p class="mt-1 text-xs text-red-600">Elegí una categoría</p>
+              }
             </div>
           </div>
 

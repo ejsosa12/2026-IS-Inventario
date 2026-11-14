@@ -8,9 +8,12 @@ export interface ApiResponse<T> {
   data: T | null;
 }
 
+// HU-05: the owner creates, renames and deactivates them
 export interface Category {
   id: number;
   nombre: string;
+  activo: boolean; // inactive: its products keep it, new products cannot pick it
+  productos: number; // how many products have it
 }
 
 // HU-06: how the product is bought. "caja" with factor 50 = 1 caja holds 50 lb
@@ -26,7 +29,7 @@ export interface NewProduct {
   precio: number;
   unidad_base: UnidadBase;
   stock_minimo: number | null; // null = no alerts (HU-21)
-  categoria_id: number | null;
+  categoria_id: number; // HU-05: required
   presentaciones?: NewPresentation[]; // optional, empty = bought in the base unit
 }
 
@@ -71,7 +74,7 @@ export interface ProductDetail extends Product {
 export interface EditProductRequest {
   codigo: string;
   nombre: string;
-  categoria_id: number | null;
+  categoria_id: number; // HU-05: required
   unidad_base: UnidadBase;
   stock_minimo: number | null;
   precio: number;

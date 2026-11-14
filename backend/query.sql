@@ -49,6 +49,8 @@ nombre, rol, email, password_hash
 create table categories(
 	id int AUTO_INCREMENT not null,
 	nombre varchar(50) not null unique,
+	-- HU-05: el dueño la desactiva sin borrarla; sus productos la conservan
+	activo boolean not null default true,
 	PRIMARY KEY(id)
 );
 
@@ -85,7 +87,8 @@ create table products(
 	stock_minimo decimal(10,3) check (stock_minimo >= 0),
 	-- HU-04: dar de baja sin borrar el historial
 	activo boolean not null default true,
-	categoria_id int,
+	-- HU-05: cada producto pertenece a una categoría
+	categoria_id int not null,
 	PRIMARY KEY(id),
 	FOREIGN KEY(categoria_id) REFERENCES categories(id)
 );

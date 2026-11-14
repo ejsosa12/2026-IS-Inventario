@@ -34,6 +34,25 @@ export class DataServices {
       .pipe(map((response) => response.data ?? []));
   }
 
+  // HU-05 (owner only): create, rename, deactivate/reactivate
+  addCategory(nombre: string) {
+    return this.http
+      .post<ApiResponse<Category>>(`${this.API_URL}/add-category`, { nombre })
+      .pipe(map((response) => response.data as Category));
+  }
+
+  editCategory(id: number, nombre: string) {
+    return this.http
+      .put<ApiResponse<Category>>(`${this.API_URL}/edit-category/${id}`, { nombre })
+      .pipe(map((response) => response.data as Category));
+  }
+
+  setCategoryStatus(id: number, activo: boolean) {
+    return this.http
+      .put<ApiResponse<Category>>(`${this.API_URL}/category-status/${id}`, { activo })
+      .pipe(map((response) => response.data as Category));
+  }
+
   addProduct(product: NewProduct) {
     return this.http
       .post<ApiResponse<Product>>(`${this.API_URL}/add-product`, product)

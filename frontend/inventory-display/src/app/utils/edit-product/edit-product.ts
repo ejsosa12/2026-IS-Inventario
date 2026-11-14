@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -30,6 +30,10 @@ export class EditProduct {
 
   product = signal<ProductDetail | null>(null);
   categories = signal<Category[]>([]);
+  // HU-05: inactive categories cannot be picked, but the product may keep the one it has
+  categoryOptions = computed(() =>
+    this.categories().filter((c) => c.activo || c.id === this.product()?.categoria_id),
+  );
   loading = signal(true);
   saving = signal(false);
   error = signal<string | null>(null);
@@ -38,7 +42,8 @@ export class EditProduct {
   form = this.fb.group({
     codigo: ['', [Validators.required, Validators.maxLength(30)]],
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
-    categoria_id: [null as number | null],
+    // HU-05: every product belongs to a category
+    categoria_id: [null as number | null, Validators.required],
     unidad_base: ['unidad' as UnidadBase, Validators.required],
     stock_minimo: [null as number | null, Validators.min(0)],
     precio: [null as number | null, [Validators.required, Validators.min(0)]],
@@ -55,7 +60,9 @@ export class EditProduct {
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
-        this.error.set(err.status === 404 ? 'Ese producto no existe' : 'No se pudo cargar el producto');
+        this.error.set(
+          err.status === 404 ? 'Ese producto no existe' : 'No se pudo cargar el producto',
+        );
         this.loading.set(false);
       },
     });
@@ -146,7 +153,7 @@ export class EditProduct {
     const request: EditProductRequest = {
       codigo: value.codigo!.trim(),
       nombre: value.nombre!.trim(),
-      categoria_id: value.categoria_id ?? null,
+      categoria_id: value.categoria_id!,
       unidad_base: value.unidad_base!,
       stock_minimo: value.stock_minimo ?? null,
       precio: value.precio!,

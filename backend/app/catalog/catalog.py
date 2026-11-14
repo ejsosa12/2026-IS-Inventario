@@ -16,6 +16,24 @@ def _error(message, code=400):
     return {"status": 1, "message": message, "data": None}, code
 
 
+def _check_category(access, categoria_id, keep_id=None):
+    """HU-05: categoria_id is required and must be an active category.
+
+    keep_id is the product's current category (on edit): keeping it is fine even if inactive.
+    Returns an error response, or None when it is fine.
+    """
+    if categoria_id is None:
+        return _error("categoria_id is required")
+    if isinstance(categoria_id, bool) or not isinstance(categoria_id, int):
+        return _error("categoria_id must be an integer")
+    category = access.get_category_by_id(categoria_id)
+    if category is None:
+        return _error("categoria_id does not exist", 404)
+    if not category["activo"] and categoria_id != keep_id:
+        return _error("categoria_id is inactive")
+    return None
+
+
 def _to_decimal(value):
     """Converts a JSON number (or numeric string) to Decimal. Returns None if it is not a number."""
     # bool is a subclass of int in Python: true would become 1
@@ -158,12 +176,10 @@ def add_product():
 
     access = AccessData()
 
-    # categoria_id is optional, but if it comes it must exist
-    if categoria_id is not None:
-        if isinstance(categoria_id, bool) or not isinstance(categoria_id, int):
-            return _error("categoria_id must be an integer")
-        if not access.category_exists(categoria_id):
-            return _error("categoria_id does not exist", 404)
+    # HU-05: every product belongs to an active category
+    error = _check_category(access, categoria_id)
+    if error:
+        return error
 
     if access.product_code_exists(codigo):
         return _error(f"a product with codigo '{codigo}' already exists", 409)
@@ -290,11 +306,10 @@ def edit_product(product_id):
         if unidad_base == "unidad" and stock_minimo != stock_minimo.to_integral_value():
             return _error("stock_minimo must be a whole number for products sold by unidad")
 
-    if categoria_id is not None:
-        if isinstance(categoria_id, bool) or not isinstance(categoria_id, int):
-            return _error("categoria_id must be an integer")
-        if not access.category_exists(categoria_id):
-            return _error("categoria_id does not exist", 404)
+    # HU-05: required; a product may keep its category even if it was deactivated
+    error = _check_category(access, categoria_id, keep_id=current["categoria_id"])
+    if error:
+        return error
 
     if access.product_code_taken(codigo, product_id):
         return _error(f"a product with codigo '{codigo}' already exists", 409)
@@ -352,13 +367,100 @@ def get_low_stock():
     }, 200
 
 
+def _category_to_json(category):
+    """activo comes from the DB as 0/1; Angular expects true/false."""
+    return {**category, "activo": bool(category["activo"])}
+
+
+def _read_category_name(body):
+    """HU-05: validates the name for add and rename. Returns (nombre, error)."""
+    raw = body.get("nombre") if isinstance(body, dict) else None
+    # "  Pintura   y   barniz " -> "Pintura y barniz"
+    nombre = " ".join(str(raw or "").split())
+    if not nombre:
+        return None, _error("nombre is required")
+    if len(nombre) > 50:
+        return None, _error("nombre must have at most 50 characters")
+    return nombre, None
+
+
 @catalog.route('api/v1/categories', methods=['GET'])
 @requiere_rol()  # any logged-in user
 def get_categories():
+    # HU-05: active and inactive; the product forms only offer the active ones
     return {
         "status": 0,
         "message": "SUCCESS: categories",
-        "data": AccessData().get_categories(),
+        "data": [_category_to_json(c) for c in AccessData().get_categories()],
+    }, 200
+
+
+@catalog.route('api/v1/add-category', methods=['POST'])
+@requiere_rol('admin')  # HU-05: only the owner creates categories
+def add_category():
+    nombre, error = _read_category_name(request.get_json(silent=True))
+    if error:
+        return error
+
+    access = AccessData()
+    if access.category_name_taken(nombre):
+        return _error("a category with that nombre already exists", 409)
+    try:
+        new_id = access.add_category(nombre)
+    except pymysql.err.IntegrityError:
+        return _error("a category with that nombre already exists", 409)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: category created",
+        "data": _category_to_json(access.get_category_by_id(new_id)),
+    }, 201
+
+
+@catalog.route('api/v1/edit-category/<int:category_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-05: only the owner renames categories
+def edit_category(category_id):
+    nombre, error = _read_category_name(request.get_json(silent=True))
+    if error:
+        return error
+
+    access = AccessData()
+    if access.get_category_by_id(category_id) is None:
+        return _error("category does not exist", 404)
+    # Changing only upper/lower case of its own name is fine
+    if access.category_name_taken(nombre, category_id):
+        return _error("a category with that nombre already exists", 409)
+    try:
+        access.rename_category(category_id, nombre)
+    except pymysql.err.IntegrityError:
+        return _error("a category with that nombre already exists", 409)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: category renamed",
+        "data": _category_to_json(access.get_category_by_id(category_id)),
+    }, 200
+
+
+@catalog.route('api/v1/category-status/<int:category_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-05: only the owner deactivates categories
+def set_category_status(category_id):
+    body = request.get_json(silent=True)
+    activo = body.get("activo") if isinstance(body, dict) else None
+    if not isinstance(activo, bool):
+        return _error("activo must be true or false")
+
+    access = AccessData()
+    if access.get_category_by_id(category_id) is None:
+        return _error("category does not exist", 404)
+
+    # Soft delete: its products keep it, but new products cannot pick it
+    access.set_category_active(category_id, activo)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: category " + ("activated" if activo else "deactivated"),
+        "data": _category_to_json(access.get_category_by_id(category_id)),
     }, 200
 
 
