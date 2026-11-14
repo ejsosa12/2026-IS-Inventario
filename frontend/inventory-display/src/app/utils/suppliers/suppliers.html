@@ -148,8 +148,9 @@
                                   @if (isAdmin()) {
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
                                       <a [routerLink]="['edit-supplier', supplier.id]"
-                                         class="px-3 py-1 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
-                                        Editar
+                                         class="px-3 py-1 border border-gray-300 text-gray-700 rounded-lg
+                                         hover:bg-gray-100 transition-colors">
+                                            <i class="fas fa-edit"></i>
                                       </a>
                                       <button type="button" (click)="toggleActive(supplier)"
                                               [disabled]="busyId() === supplier.id"

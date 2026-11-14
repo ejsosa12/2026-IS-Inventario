@@ -73,7 +73,12 @@ create table products(
 	id int AUTO_INCREMENT not null,
 	codigo varchar(30) not null unique,
 	nombre varchar(100) not null,
+	-- Precio de venta por unidad base
 	precio decimal(10,2) not null check (precio >= 0),
+	-- HU-02: precio de compra por unidad base (4 decimales como en movements).
+	-- Cada factura (HU-11) lo actualiza sola y el dueño lo puede corregir.
+	-- NULL = todavía no se ha comprado
+	precio_compra decimal(12,4) check (precio_compra >= 0),
 	-- HU-07: 'lb' y 'm' aceptan decimales, 'unidad' solo enteros
 	unidad_base enum('unidad', 'lb', 'm') not null default 'unidad',
 	-- HU-21: NULL = el producto no genera alertas
@@ -96,6 +101,24 @@ create table presentations(
 	-- Un producto no puede tener dos presentaciones con el mismo nombre
 	UNIQUE(producto_id, nombre),
 	FOREIGN KEY(producto_id) REFERENCES products(id)
+);
+
+-- HU-02: quién cambió un precio, cuándo y cuál era el anterior.
+-- Solo los cambios hechos por el dueño en "Editar producto"; las facturas
+-- ya son su propio registro del precio de compra
+create table price_history(
+	id int AUTO_INCREMENT not null,
+	producto_id int not null,
+	-- Cuál de los dos precios cambió
+	tipo enum('venta', 'compra') not null,
+	-- NULL si antes no tenía (precio de compra de un producto sin compras)
+	precio_anterior decimal(12,4),
+	precio_nuevo decimal(12,4) not null,
+	usuario_id int not null,
+	fecha datetime not null default current_timestamp,
+	PRIMARY KEY(id),
+	FOREIGN KEY(producto_id) REFERENCES products(id),
+	FOREIGN KEY(usuario_id) REFERENCES users(users)
 );
 
 -- HU-11: encabezado de una factura de compra (los productos van en movements)

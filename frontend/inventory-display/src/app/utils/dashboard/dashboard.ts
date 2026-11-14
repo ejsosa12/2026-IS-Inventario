@@ -3,6 +3,9 @@ import { RouterLink } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
 import { LowStockItem, UnidadBase } from '../../models/product';
 
+// sessionStorage key: the user closed the HU-22 notification. AuthService.logout() clears it
+const DISMISSED_KEY = 'lowStockDismissed';
+
 // The first page after logging in. HU-22: it says right away what is running out
 @Component({
   imports: [RouterLink],
@@ -21,8 +24,13 @@ export class Dashboard {
 
   outOfStock = computed(() => this.lowStock().filter((p) => p.agotado).length);
 
-  // The "X" of the notification. Only for this visit: it shows again next time (HU-22)
-  dismissed = signal(false);
+  // The "X" of the notification: stays closed until the user logs out
+  dismissed = signal(sessionStorage.getItem(DISMISSED_KEY) === '1');
+
+  dismiss() {
+    sessionStorage.setItem(DISMISSED_KEY, '1');
+    this.dismissed.set(true);
+  }
 
   constructor() {
     this.dataServices.getLowStock().subscribe({

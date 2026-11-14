@@ -107,6 +107,8 @@ export class AuthService {
 
   logout() {
     localStorage.removeItem('token');
+    // Whatever was hidden during this session shows again on the next login (e.g. HU-22 notification)
+    sessionStorage.clear();
     this._token.set(null);
   }
 }
