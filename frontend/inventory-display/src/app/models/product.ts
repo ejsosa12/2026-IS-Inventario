@@ -36,6 +36,19 @@ export interface Product extends NewProduct {
   activo: boolean;
 }
 
+// HU-22: one row of GET /api/v1/low-stock (active products at or below their minimum)
+export interface LowStockItem {
+  id: number;
+  codigo: string;
+  nombre: string;
+  categoria: string | null;
+  unidad_base: UnidadBase;
+  existencia: number;
+  stock_minimo: number;
+  faltan: number; // what is missing to get back to the minimum
+  agotado: boolean; // existencia is 0
+}
+
 // One row of GET /api/v1/products
 export interface ProductListItem extends Product {
   categoria: string | null;

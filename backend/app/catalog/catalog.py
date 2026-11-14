@@ -180,6 +180,28 @@ def get_products():
     }, 200
 
 
+@catalog.route('api/v1/low-stock', methods=['GET'])
+@requiere_rol()  # HU-22: everyone sees what is running out (no money involved)
+def get_low_stock():
+    data = []
+    for product in AccessData().get_low_stock():
+        existencia = product["existencia"]
+        minimo = product["stock_minimo"]
+        data.append({
+            **product,
+            "existencia": float(existencia),
+            "stock_minimo": float(minimo),
+            # What is missing to get back to the minimum (HU-23 will build on this)
+            "faltan": float(minimo - existencia),
+            "agotado": existencia <= 0,
+        })
+    return {
+        "status": 0,
+        "message": "SUCCESS: low stock",
+        "data": data,
+    }, 200
+
+
 @catalog.route('api/v1/categories', methods=['GET'])
 @requiere_rol()  # any logged-in user
 def get_categories():

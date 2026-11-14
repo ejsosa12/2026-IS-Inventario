@@ -1,7 +1,14 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Service } from '@angular/core';
 import { map } from 'rxjs';
-import { ApiResponse, Category, NewProduct, Product, ProductListItem } from '../../models/product';
+import {
+  ApiResponse,
+  Category,
+  LowStockItem,
+  NewProduct,
+  Product,
+  ProductListItem,
+} from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
@@ -29,6 +36,13 @@ export class DataServices {
     return this.http
       .post<ApiResponse<Product>>(`${this.API_URL}/add-product`, product)
       .pipe(map((response) => response.data as Product));
+  }
+
+  // HU-22: what is running out. Out of stock first, then furthest from the minimum
+  getLowStock() {
+    return this.http
+      .get<ApiResponse<LowStockItem[]>>(`${this.API_URL}/low-stock`)
+      .pipe(map((response) => response.data ?? []));
   }
 
   getSuppliers() {

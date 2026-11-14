@@ -183,6 +183,37 @@ class AccessData:
                 cursor.execute(query)
                 return cursor.fetchall()
 
+    def get_low_stock(self):
+        """HU-22: active products with a minimum that are at it or below it.
+
+        HU-21: products without stock_minimo never show up. Out of stock first, then the
+        ones furthest from their minimum in percent (2 of 20 sacks before 8 of 10 screws),
+        because comparing raw amounts would mix lb, m and units.
+        """
+        # The stock is computed in a subquery: MariaDB cannot sort by an expression
+        # that uses the alias of a SUM
+        query = """
+            SELECT * FROM (
+                SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.stock_minimo,
+                       c.nombre AS categoria,
+                       COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+                           AS existencia
+                FROM products p
+                LEFT JOIN categories c ON c.id = p.categoria_id
+                LEFT JOIN movements m ON m.producto_id = p.id
+                WHERE p.activo = true AND p.stock_minimo IS NOT NULL
+                GROUP BY p.id, c.nombre
+            ) s
+            WHERE s.existencia <= s.stock_minimo
+            ORDER BY s.existencia > 0,
+                     CASE WHEN s.stock_minimo > 0 THEN s.existencia / s.stock_minimo ELSE 1 END,
+                     s.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
     def get_product_by_id(self, product_id):
         """Devuelve el producto como dict, o None si no existe."""
         query = """
