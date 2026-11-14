@@ -26,17 +26,32 @@
   <header class="bg-white shadow-sm border-b border-gray-200">
     <div class="px-6 py-4">
       <h1 class="text-2xl font-semibold text-gray-900">Sacar Mercadería</h1>
-      <p class="text-gray-600 text-sm mt-1">Registrar producto dañado o que ya no se puede vender</p>
+      <p class="text-gray-600 text-sm mt-1">Registrar producto dañado o lo que se usa en la ferretería</p>
     </div>
   </header>
 
   <main class="p-6 space-y-6">
 
-    <!-- HU-16: the form -->
+    <!-- HU-16 / HU-17: the form -->
     <div class="max-w-3xl bg-white rounded-xl shadow-sm border border-gray-200">
-      <div class="px-6 py-4 border-b border-gray-200">
-        <h3 class="text-lg font-semibold text-gray-900">Producto dañado</h3>
-        <p class="text-gray-600 text-sm">La cantidad va en la unidad del producto (u, lb o m)</p>
+      <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-6">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900">{{ t().title }}</h3>
+          <p class="text-gray-600 text-sm">La cantidad va en la unidad del producto (u, lb o m)</p>
+        </div>
+        <!-- What is being registered -->
+        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden whitespace-nowrap">
+          <button type="button" (click)="setTipo('dano')"
+                  class="px-4 py-2 text-sm font-medium transition-colors"
+                  [class]="tipo() === 'dano' ? 'bg-red-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'">
+            Daño
+          </button>
+          <button type="button" (click)="setTipo('uso')"
+                  class="px-4 py-2 text-sm font-medium border-l border-gray-300 transition-colors"
+                  [class]="tipo() === 'uso' ? 'bg-yellow-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'">
+            Uso interno
+          </button>
+        </div>
       </div>
 
       <form [formGroup]="form" (ngSubmit)="save()" class="p-6 space-y-6">
@@ -109,28 +124,40 @@
           </div>
 
           <div class="md:col-span-2">
-            <label for="motivo" class="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <label for="motivo" class="block text-sm font-medium text-gray-700 mb-1">{{ t().motivoLabel }} *</label>
             <input id="motivo" type="text" formControlName="motivo" maxlength="200"
-                   placeholder="Se rompió el saco al bajarlo del camión"
+                   [placeholder]="t().motivoPlaceholder"
                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
             @if (invalid('motivo')) {
-              <p class="mt-1 text-xs text-red-600">Escriba por qué sale (máx. 200 caracteres)</p>
+              <p class="mt-1 text-xs text-red-600">Este campo es obligatorio (máx. 200 caracteres)</p>
             }
           </div>
         </div>
 
         <div class="flex justify-end pt-4 border-t border-gray-200">
           <button type="submit" [disabled]="saving()"
-                  class="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 disabled:opacity-60 transition-colors">
-            {{ saving() ? 'Guardando...' : 'Registrar daño' }}
+                  class="px-4 py-2 text-white rounded-lg disabled:opacity-60 transition-colors"
+                  [class]="tipo() === 'dano' ? 'bg-red-700 hover:bg-red-800' : 'bg-yellow-600 hover:bg-yellow-700'">
+            {{ saving() ? 'Guardando...' : t().button }}
           </button>
         </div>
       </form>
     </div>
 
-    <!-- HU-16: these outputs are listed apart from sales -->
+    <!-- HU-16 / HU-17: these outputs are listed apart from sales -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">Últimos productos dañados</h3>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">Últimas salidas</h3>
+        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm">
+          @for (option of filterOptions; track option.value) {
+            <button type="button" (click)="listFilter.set(option.value)"
+                    class="px-3 py-1 border-l first:border-l-0 border-gray-300 transition-colors"
+                    [class]="listFilter() === option.value ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'">
+              {{ option.label }}
+            </button>
+          }
+        </div>
+      </div>
       <div class="overflow-auto border border-gray-200 rounded-lg">
         @if (loadingOutputs()) {
           <p class="p-6 text-sm text-gray-500">Cargando salidas...</p>
@@ -139,27 +166,43 @@
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Motivo</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registró</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              @for (output of outputs(); track output.id) {
+              @for (output of shownOutputs(); track output.id) {
                 <tr class="hover:bg-gray-50">
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ output.fecha | date: 'dd/MM/yyyy HH:mm' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold"
+                          [class]="output.tipo === 'dano' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'">
+                      {{ texts[output.tipo].label }}
+                    </span>
+                  </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm font-medium text-gray-900">{{ output.producto }}</div>
                     <div class="text-sm text-gray-500">{{ output.codigo }}</div>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ amount(output.cantidad, output.unidad_base) }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ output.motivo }}</td>
+                  <!-- At the last purchase price when it left -->
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    @if (output.costo !== null) {
+                      Q {{ output.costo | number: '1.2-2' }}
+                    } @else {
+                      <span class="text-gray-400">—</span>
+                    }
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-700" style="min-width: 16rem">{{ output.motivo }}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ output.usuario }}</td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">Todavía no se ha registrado ningún producto dañado.</td>
+                  <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">Todavía no hay salidas de este tipo.</td>
                 </tr>
               }
             </tbody>

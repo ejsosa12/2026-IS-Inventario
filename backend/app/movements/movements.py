@@ -205,22 +205,27 @@ def get_entry(entry_id):
 
 # ------------------------------------------------------------
 # Outputs: stock that leaves without being sold.
-# HU-16 merma ('dano'). HU-17 will add 'uso' here. Sales come from billing.
+# HU-16 merma ('dano') and HU-17 uso interno ('uso'). Sales come from billing.
 # ------------------------------------------------------------
 
-OUTPUT_TYPES = ("dano",)
+OUTPUT_TYPES = ("dano", "uso")
 
 
 def _output_to_json(output):
+    """precio is the last purchase price per base unit; costo is what the output was worth."""
+    precio = output["precio"]
     return {
         **output,
         "cantidad": float(output["cantidad"]),
+        "precio": float(precio) if precio is not None else None,
+        "costo": float((output["cantidad"] * precio).quantize(Decimal("0.01")))
+        if precio is not None else None,
         "fecha": output["fecha"].isoformat(),
     }
 
 
 @movements.route('api/v1/add-output', methods=['POST'])
-@requiere_rol()  # HU-16: Kevin and Byron register the broken product
+@requiere_rol()  # HU-16/HU-17: anyone logged in (broken product, or used inside the store)
 def add_output():
     body = request.get_json(silent=True)
     if not body:
@@ -278,8 +283,13 @@ def add_output():
 @movements.route('api/v1/outputs', methods=['GET'])
 @requiere_rol()  # any logged-in user
 def get_outputs():
+    # ?tipo=dano or ?tipo=uso lists only that kind; without it, both
+    tipo = request.args.get("tipo")
+    if tipo is not None and tipo not in OUTPUT_TYPES:
+        return _error("tipo is not valid")
+    tipos = (tipo,) if tipo else OUTPUT_TYPES
     return {
         "status": 0,
         "message": "SUCCESS: outputs",
-        "data": [_output_to_json(o) for o in AccessData().get_outputs(OUTPUT_TYPES)],
+        "data": [_output_to_json(o) for o in AccessData().get_outputs(tipos)],
     }, 200

@@ -1,16 +1,27 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
-import { NewOutput, Output } from '../../models/output';
+import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { ProductListItem, UnidadBase } from '../../models/product';
 
-// HU-16: take out of stock what broke or went bad (merma), always in the base unit.
-// HU-18: it never lets the stock go below zero
+// The texts that change between the two kinds of output
+interface TipoTexts {
+  label: string; // badge in the list
+  title: string;
+  motivoLabel: string;
+  motivoPlaceholder: string;
+  button: string;
+  done: string; // "Daño registrado"
+  pickError: string;
+}
+
+// HU-16 (merma) and HU-17 (uso interno): take out of stock what broke or what the store used,
+// always in the base unit. HU-18: it never lets the stock go below zero
 @Component({
-  imports: [ReactiveFormsModule, DatePipe],
+  imports: [ReactiveFormsModule, DatePipe, DecimalPipe],
   selector: 'app-outputs',
   templateUrl: './outputs.html',
 })
@@ -19,6 +30,43 @@ export class Outputs {
   private fb = inject(FormBuilder);
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+
+  readonly texts: Record<OutputTipo, TipoTexts> = {
+    dano: {
+      label: 'Daño',
+      title: 'Producto dañado',
+      motivoLabel: 'Motivo',
+      motivoPlaceholder: 'Se rompió el saco al bajarlo del camión',
+      button: 'Registrar daño',
+      done: 'Daño registrado',
+      pickError: 'Elija el producto que se dañó',
+    },
+    uso: {
+      label: 'Uso interno',
+      title: 'Uso interno',
+      motivoLabel: '¿Para qué se usó?',
+      motivoPlaceholder: 'Reparar la tubería del baño',
+      button: 'Registrar uso interno',
+      done: 'Uso interno registrado',
+      pickError: 'Elija el producto que se usó',
+    },
+  };
+
+  // What is being registered (the Daño | Uso interno buttons)
+  tipo = signal<OutputTipo>('dano');
+  t = computed(() => this.texts[this.tipo()]);
+
+  // List filter: null = both
+  listFilter = signal<OutputTipo | null>(null);
+  readonly filterOptions: { value: OutputTipo | null; label: string }[] = [
+    { value: null, label: 'Todos' },
+    { value: 'dano', label: this.texts.dano.label },
+    { value: 'uso', label: this.texts.uso.label },
+  ];
+  shownOutputs = computed(() => {
+    const filter = this.listFilter();
+    return filter ? this.outputs().filter((o) => o.tipo === filter) : this.outputs();
+  });
 
   products = signal<ProductListItem[]>([]);
   outputs = signal<Output[]>([]);
@@ -87,6 +135,12 @@ export class Outputs {
     });
   }
 
+  setTipo(tipo: OutputTipo) {
+    this.tipo.set(tipo);
+    this.error.set(null);
+    this.created.set(null);
+  }
+
   pick(product: ProductListItem) {
     this.selectedId.set(product.id);
     this.query.set('');
@@ -151,7 +205,7 @@ export class Outputs {
 
     const product = this.selected();
     if (!product) {
-      this.error.set('Elija el producto que se dañó');
+      this.error.set(this.t().pickError);
       return;
     }
     const { cantidad, motivo } = this.form.getRawValue();
@@ -168,7 +222,7 @@ export class Outputs {
     }
 
     const output: NewOutput = {
-      tipo: 'dano',
+      tipo: this.tipo(),
       producto_id: product.id,
       cantidad,
       motivo: motivo.trim(),
@@ -179,7 +233,7 @@ export class Outputs {
       next: (saved) => {
         this.saving.set(false);
         this.created.set(
-          `Salida registrada: ${this.amount(saved.cantidad, saved.unidad_base)} de ${saved.producto}`,
+          `${this.texts[saved.tipo].done}: ${this.amount(saved.cantidad, saved.unidad_base)} de ${saved.producto}`,
         );
         this.outputs.update((list) => [saved, ...list]);
         // The stock went down: update it here without asking Flask again

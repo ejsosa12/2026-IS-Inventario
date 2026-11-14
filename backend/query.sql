@@ -126,9 +126,12 @@ create table movements(
 	-- HU-12: lo que dice la factura, en unidad base. Si no coincide con
 	-- cantidad, la entrada sale en "entradas con faltantes". NULL fuera de entradas
 	cantidad_factura decimal(10,3) check (cantidad_factura >= 0),
-	-- Precio por unidad base en ese momento. NULL en daño y uso interno.
+	-- Precio por unidad base en ese momento. En entradas, lo que se pagó.
+	-- En daño y uso interno, el último precio de compra (para saber cuánto se perdió)
 	-- 4 decimales: Q100 el rollo de 30 m = Q3.3333 por metro
 	precio decimal(12,4) check (precio >= 0),
+	-- HU-16 y HU-17: por qué salió (se rompió, para qué se usó). NULL en entradas y ventas
+	motivo varchar(200),
 	fecha datetime not null default current_timestamp,
 	producto_id int not null,
 	usuario_id int not null,
@@ -139,6 +142,9 @@ create table movements(
 	-- HU-06: en qué presentación llegó (caja, rollo). NULL = en unidad base
 	presentacion_id int,
 	PRIMARY KEY(id),
+	-- Daño y uso interno siempre llevan motivo
+	CONSTRAINT chk_movements_motivo
+		CHECK (tipo NOT IN ('dano', 'uso') OR (motivo IS NOT NULL AND motivo <> '')),
 	FOREIGN KEY(producto_id) REFERENCES products(id),
 	FOREIGN KEY(usuario_id) REFERENCES users(users),
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),

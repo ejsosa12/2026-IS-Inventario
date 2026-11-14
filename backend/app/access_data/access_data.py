@@ -465,14 +465,30 @@ class AccessData:
         """, {"id": producto_id})
         return cursor.fetchone()["existencia"]
 
+    @staticmethod
+    def _last_purchase_price(cursor, producto_id):
+        """Price per base unit of the most recent 'entrada' of the product, or None.
+
+        Saved on outputs so later reports can tell how much money was lost (merma)
+        or used inside the store (uso interno).
+        """
+        cursor.execute("""
+            SELECT precio FROM movements
+            WHERE producto_id = %(id)s AND tipo = 'entrada' AND precio IS NOT NULL
+            ORDER BY fecha DESC, id DESC
+            LIMIT 1
+        """, {"id": producto_id})
+        row = cursor.fetchone()
+        return row["precio"] if row else None
+
     def add_output(self, tipo, producto_id, cantidad, motivo, usuario_id):
-        """Guarda una salida ('dano' o 'uso') y devuelve su id.
+        """Guarda una salida ('dano' o 'uso') con su costo y devuelve su id.
 
         cantidad is already in the base unit. Lanza InsufficientStock si no alcanza (HU-18).
         """
         query = """
-            INSERT INTO movements (tipo, cantidad, motivo, producto_id, usuario_id)
-            VALUES (%(tipo)s, %(cantidad)s, %(motivo)s, %(producto_id)s, %(usuario_id)s)
+            INSERT INTO movements (tipo, cantidad, precio, motivo, producto_id, usuario_id)
+            VALUES (%(tipo)s, %(cantidad)s, %(precio)s, %(motivo)s, %(producto_id)s, %(usuario_id)s)
         """
         with self._connection() as conn:
             try:
@@ -482,6 +498,7 @@ class AccessData:
                         raise InsufficientStock(existencia)
                     cursor.execute(query, {
                         "tipo": tipo, "cantidad": cantidad, "motivo": motivo,
+                        "precio": self._last_purchase_price(cursor, producto_id),
                         "producto_id": producto_id, "usuario_id": usuario_id,
                     })
                     output_id = cursor.lastrowid
@@ -493,7 +510,7 @@ class AccessData:
             return output_id
 
     OUTPUT_SELECT = """
-        SELECT m.id, m.tipo, m.cantidad, m.motivo, m.fecha,
+        SELECT m.id, m.tipo, m.cantidad, m.precio, m.motivo, m.fecha,
                m.producto_id, p.codigo, p.nombre AS producto, p.unidad_base,
                m.usuario_id, u.nombre AS usuario
         FROM movements m

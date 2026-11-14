@@ -4,7 +4,7 @@ import { map } from 'rxjs';
 import { ApiResponse, Category, NewProduct, Product, ProductListItem } from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
-import { NewOutput, Output } from '../../models/output';
+import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
@@ -63,16 +63,18 @@ export class DataServices {
       .pipe(map((response) => response.data as Supplier));
   }
 
-  // HU-16: stock that leaves without being sold (merma). A 409 means not enough stock (HU-18)
+  // HU-16/HU-17: stock that leaves without being sold. A 409 means not enough stock (HU-18)
   addOutput(output: NewOutput) {
     return this.http
       .post<ApiResponse<Output>>(`${this.API_URL}/add-output`, output)
       .pipe(map((response) => response.data as Output));
   }
 
-  getOutputs() {
+  // tipo: only 'dano' or only 'uso'; without it, both
+  getOutputs(tipo?: OutputTipo) {
+    const params: Record<string, string> = tipo ? { tipo } : {};
     return this.http
-      .get<ApiResponse<Output[]>>(`${this.API_URL}/outputs`)
+      .get<ApiResponse<Output[]>>(`${this.API_URL}/outputs`, { params })
       .pipe(map((response) => response.data ?? []));
   }
 
