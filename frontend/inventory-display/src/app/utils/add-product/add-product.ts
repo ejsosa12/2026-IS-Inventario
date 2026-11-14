@@ -18,6 +18,7 @@ export class AddProduct {
     { value: 'unidad', label: 'Unidad' },
     { value: 'lb', label: 'Libra (lb)' },
     { value: 'm', label: 'Metro (m)' },
+    { value: 'gal', label: 'Galón (gal)' },
   ];
 
   categories = signal<Category[]>([]);
@@ -26,7 +27,12 @@ export class AddProduct {
   created = signal<string | null>(null);
 
   // Plural names for the "1 caja = 50 lb" hint
-  private readonly unidadPlural: Record<UnidadBase, string> = { unidad: 'unidades', lb: 'lb', m: 'm' };
+  private readonly unidadPlural: Record<UnidadBase, string> = {
+    unidad: 'unidades',
+    lb: 'lb',
+    m: 'm',
+    gal: 'gal',
+  };
 
   // HU-06: one row of "Se compra en"
   private presentationGroup() {
@@ -80,7 +86,7 @@ export class AddProduct {
     });
   }
 
-  // HU-07: by unit only whole numbers, by lb or m decimals are allowed
+  // HU-07: by unit only whole numbers, by lb, m or gal decimals are allowed
   get stockStep(): string {
     return this.form.controls.unidad_base.value === 'unidad' ? '1' : '0.01';
   }
@@ -103,7 +109,11 @@ export class AddProduct {
     const value = this.form.getRawValue();
 
     // HU-07: same rule Flask checks, but here the user sees it right away
-    if (value.unidad_base === 'unidad' && value.stock_minimo != null && !Number.isInteger(value.stock_minimo)) {
+    if (
+      value.unidad_base === 'unidad' &&
+      value.stock_minimo != null &&
+      !Number.isInteger(value.stock_minimo)
+    ) {
       this.error.set('Para productos por unidad el stock mínimo debe ser un número entero');
       return;
     }
@@ -119,7 +129,9 @@ export class AddProduct {
       return;
     }
     if (value.unidad_base === 'unidad' && presentaciones.some((p) => !Number.isInteger(p.factor))) {
-      this.error.set('Para productos por unidad, cada presentación debe traer un número entero de unidades');
+      this.error.set(
+        'Para productos por unidad, cada presentación debe traer un número entero de unidades',
+      );
       return;
     }
 

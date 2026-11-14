@@ -79,8 +79,8 @@ create table products(
 	-- Cada factura (HU-11) lo actualiza sola y el dueño lo puede corregir.
 	-- NULL = todavía no se ha comprado
 	precio_compra decimal(12,4) check (precio_compra >= 0),
-	-- HU-07: 'lb' y 'm' aceptan decimales, 'unidad' solo enteros
-	unidad_base enum('unidad', 'lb', 'm') not null default 'unidad',
+	-- HU-07: 'lb', 'm' y 'gal' aceptan decimales, 'unidad' solo enteros
+	unidad_base enum('unidad', 'lb', 'm', 'gal') not null default 'unidad',
 	-- HU-21: NULL = el producto no genera alertas
 	stock_minimo decimal(10,3) check (stock_minimo >= 0),
 	-- HU-04: dar de baja sin borrar el historial

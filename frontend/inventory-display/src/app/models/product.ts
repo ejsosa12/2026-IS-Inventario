@@ -1,6 +1,6 @@
 // Same shapes Flask returns in backend/app/catalog/catalog.py
 
-export type UnidadBase = 'unidad' | 'lb' | 'm';
+export type UnidadBase = 'unidad' | 'lb' | 'm' | 'gal';
 
 export interface ApiResponse<T> {
   status: number; // 0 = ok, 1 = error

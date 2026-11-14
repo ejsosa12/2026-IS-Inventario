@@ -29,7 +29,7 @@ export class Outputs {
   private dataServices = inject(DataServices);
   private fb = inject(FormBuilder);
 
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
   readonly texts: Record<OutputTipo, TipoTexts> = {
     dano: {

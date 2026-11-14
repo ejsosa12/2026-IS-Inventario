@@ -24,8 +24,9 @@ export class EditProduct {
     { value: 'unidad', label: 'Unidad' },
     { value: 'lb', label: 'Libra (lb)' },
     { value: 'm', label: 'Metro (m)' },
+    { value: 'gal', label: 'Galón (gal)' },
   ];
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
   product = signal<ProductDetail | null>(null);
   categories = signal<Category[]>([]);

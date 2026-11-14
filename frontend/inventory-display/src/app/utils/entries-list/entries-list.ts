@@ -13,7 +13,7 @@ import { UnidadBase } from '../../models/product';
 export class EntriesList {
   private dataServices = inject(DataServices);
 
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
   entries = signal<EntryListItem[]>([]);
   loading = signal(true);

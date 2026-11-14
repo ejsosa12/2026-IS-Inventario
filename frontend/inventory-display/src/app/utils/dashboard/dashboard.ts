@@ -15,7 +15,7 @@ const DISMISSED_KEY = 'lowStockDismissed';
 export class Dashboard {
   private dataServices = inject(DataServices);
 
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
   // Out of stock first, then furthest from the minimum (Flask sorts them)
   lowStock = signal<LowStockItem[]>([]);

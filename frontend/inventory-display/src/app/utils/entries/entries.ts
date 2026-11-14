@@ -39,7 +39,7 @@ export class Entries {
   private dataServices = inject(DataServices);
   private fb = inject(FormBuilder);
 
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
   readonly maxDate = today();
 
   suppliers = signal<Supplier[]>([]);

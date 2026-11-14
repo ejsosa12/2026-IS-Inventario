@@ -9,7 +9,7 @@ from app.security import requiere_rol
 catalog = Blueprint('catalog', __name__)
 
 # Same values as the ENUM in the products table
-UNIDADES_BASE = ('unidad', 'lb', 'm')
+UNIDADES_BASE = ('unidad', 'lb', 'm', 'gal')
 
 
 def _error(message, code=400):

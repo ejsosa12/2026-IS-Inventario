@@ -43,7 +43,7 @@ export class Products {
     });
   });
 
-  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm' };
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
   constructor() {
     this.dataServices.getProducts().subscribe({
@@ -77,7 +77,7 @@ export class Products {
     return { label: 'Disponible', classes: 'bg-green-100 text-green-800' };
   }
 
-  // Products by unit show whole numbers, by lb or m up to 2 decimals (HU-07)
+  // Products by unit show whole numbers, by lb, m or gal up to 2 decimals (HU-07)
   cantidadFormat(product: ProductListItem): string {
     return product.unidad_base === 'unidad' ? '1.0-0' : '1.0-2';
   }
