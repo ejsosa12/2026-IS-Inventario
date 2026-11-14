@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, request
+from flask import Blueprint, g, request
 import pymysql
 
 from app.access_data import AccessData
@@ -28,14 +28,36 @@ def _to_decimal(value):
     return number if number.is_finite() else None
 
 
+def _float_or_none(value):
+    return float(value) if value is not None else None
+
+
 def _product_to_json(product):
     """Decimals and tinyint are not friendly for Angular: send numbers and true/false."""
-    return {
+    data = {
         **product,
         "precio": float(product["precio"]),
-        "stock_minimo": float(product["stock_minimo"]) if product["stock_minimo"] is not None else None,
+        "stock_minimo": _float_or_none(product["stock_minimo"]),
         "activo": bool(product["activo"]),
     }
+    # Only in the owner's queries (HU-02, HU-29): the product list does not carry it
+    if "precio_compra" in product:
+        data["precio_compra"] = _float_or_none(product["precio_compra"])
+    return data
+
+
+def _history_to_json(change):
+    return {
+        **change,
+        "precio_anterior": _float_or_none(change["precio_anterior"]),
+        "precio_nuevo": float(change["precio_nuevo"]),
+        "fecha": change["fecha"].isoformat(),
+    }
+
+
+def _decimals_ok(value, places):
+    """True if value has at most that many decimals (precio is decimal(10,2), precio_compra (12,4))."""
+    return value == value.quantize(Decimal(1).scaleb(-places))
 
 
 def _presentation_to_json(presentation):
@@ -164,6 +186,134 @@ def add_product():
             ],
         },
     }, 201
+
+
+def _product_detail(access, product_id):
+    """Everything the edit page needs (HU-21, HU-02), or None if the product does not exist."""
+    product = access.get_product_by_id(product_id)
+    if product is None:
+        return None
+    return {
+        **_product_to_json(product),
+        "presentaciones": [
+            _presentation_to_json(p) for p in access.get_presentations_by_product(product_id)
+        ],
+        # If it already moved, its unit cannot change (the saved quantities would change meaning)
+        "tiene_movimientos": access.product_has_movements(product_id),
+        "historial_precios": [_history_to_json(h) for h in access.get_price_history(product_id)],
+    }
+
+
+@catalog.route('api/v1/products/<int:product_id>', methods=['GET'])
+@requiere_rol('admin')  # HU-29: it shows the purchase price and the price history
+def get_product(product_id):
+    detail = _product_detail(AccessData(), product_id)
+    if detail is None:
+        return _error("product does not exist", 404)
+    return {"status": 0, "message": "SUCCESS: product", "data": detail}, 200
+
+
+@catalog.route('api/v1/edit-product/<int:product_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-02 / HU-29: only the owner changes prices and the catalog
+def edit_product(product_id):
+    """HU-21 (mínimo) and HU-02 (precios). Presentations and activo are not changed here."""
+    body = request.get_json(silent=True)
+    if not body:
+        return _error("product data is required")
+
+    access = AccessData()
+    current = access.get_product_by_id(product_id)
+    if current is None:
+        return _error("product does not exist", 404)
+
+    codigo = str(body.get("codigo") or "").strip()
+    nombre = str(body.get("nombre") or "").strip()
+    unidad_base = body.get("unidad_base", current["unidad_base"])
+    categoria_id = body.get("categoria_id")
+
+    if not codigo:
+        return _error("codigo is required")
+    if len(codigo) > 30:
+        return _error("codigo must have at most 30 characters")
+    if not nombre:
+        return _error("nombre is required")
+    if len(nombre) > 100:
+        return _error("nombre must have at most 100 characters")
+
+    # Sale price (per base unit), required, decimal(10,2)
+    precio = _to_decimal(body.get("precio"))
+    if precio is None:
+        return _error("precio is required and must be a number")
+    if precio < 0:
+        return _error("precio cannot be negative")
+    if not _decimals_ok(precio, 2) or precio >= Decimal("100000000"):
+        return _error("precio can have at most 2 decimals")
+
+    # HU-02: purchase price (per base unit). Each invoice updates it; the owner may correct it.
+    # Empty is only allowed while the product has never had one
+    precio_compra = None
+    if body.get("precio_compra") not in (None, ""):
+        precio_compra = _to_decimal(body.get("precio_compra"))
+        if precio_compra is None:
+            return _error("precio_compra must be a number")
+        if precio_compra < 0:
+            return _error("precio_compra cannot be negative")
+        if not _decimals_ok(precio_compra, 4) or precio_compra >= Decimal("100000000"):
+            return _error("precio_compra can have at most 4 decimals")
+    elif current["precio_compra"] is not None:
+        return _error("precio_compra cannot be removed once the product has one")
+
+    if unidad_base not in UNIDADES_BASE:
+        return _error(f"unidad_base must be one of: {', '.join(UNIDADES_BASE)}")
+    if unidad_base != current["unidad_base"]:
+        # 50 lb already entered would become "50 unidades"
+        if access.product_has_movements(product_id):
+            return _error("unidad_base cannot change: the product already has movements")
+        # HU-07: a box of a product sold by unit holds a whole number of units
+        if unidad_base == "unidad" and any(
+            p["factor"] != p["factor"].to_integral_value()
+            for p in access.get_presentations_by_product(product_id)
+        ):
+            return _error("unidad_base cannot be unidad: a presentation has a decimal factor")
+
+    # HU-21: stock_minimo is optional. Empty = the product does not generate alerts
+    stock_minimo = None
+    if body.get("stock_minimo") not in (None, ""):
+        stock_minimo = _to_decimal(body.get("stock_minimo"))
+        if stock_minimo is None:
+            return _error("stock_minimo must be a number")
+        if stock_minimo < 0:
+            return _error("stock_minimo cannot be negative")
+        if not _decimals_ok(stock_minimo, 3):
+            return _error("stock_minimo can have at most 3 decimals")
+        # HU-07: products sold by unit only accept whole numbers
+        if unidad_base == "unidad" and stock_minimo != stock_minimo.to_integral_value():
+            return _error("stock_minimo must be a whole number for products sold by unidad")
+
+    if categoria_id is not None:
+        if isinstance(categoria_id, bool) or not isinstance(categoria_id, int):
+            return _error("categoria_id must be an integer")
+        if not access.category_exists(categoria_id):
+            return _error("categoria_id does not exist", 404)
+
+    if access.product_code_taken(codigo, product_id):
+        return _error(f"a product with codigo '{codigo}' already exists", 409)
+
+    fields = {
+        "codigo": codigo, "nombre": nombre, "categoria_id": categoria_id,
+        "unidad_base": unidad_base, "stock_minimo": stock_minimo,
+        "precio": precio, "precio_compra": precio_compra,
+    }
+    try:
+        access.update_product(product_id, fields, g.user["users"])
+    except pymysql.err.IntegrityError:
+        return _error(f"a product with codigo '{codigo}' already exists", 409)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: product updated",
+        "data": _product_detail(access, product_id),
+    }, 200
 
 
 @catalog.route('api/v1/products', methods=['GET'])

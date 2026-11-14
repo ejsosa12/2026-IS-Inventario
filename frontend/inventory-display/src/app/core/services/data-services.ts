@@ -4,9 +4,11 @@ import { map } from 'rxjs';
 import {
   ApiResponse,
   Category,
+  EditProductRequest,
   LowStockItem,
   NewProduct,
   Product,
+  ProductDetail,
   ProductListItem,
 } from '../../models/product';
 import { NewSupplier, Supplier } from '../../models/supplier';
@@ -36,6 +38,19 @@ export class DataServices {
     return this.http
       .post<ApiResponse<Product>>(`${this.API_URL}/add-product`, product)
       .pipe(map((response) => response.data as Product));
+  }
+
+  // HU-21 / HU-02 (owner only): product with purchase price, presentations and price history
+  getProduct(id: number) {
+    return this.http
+      .get<ApiResponse<ProductDetail>>(`${this.API_URL}/products/${id}`)
+      .pipe(map((response) => response.data as ProductDetail));
+  }
+
+  editProduct(id: number, product: EditProductRequest) {
+    return this.http
+      .put<ApiResponse<ProductDetail>>(`${this.API_URL}/edit-product/${id}`, product)
+      .pipe(map((response) => response.data as ProductDetail));
   }
 
   // HU-22: what is running out. Out of stock first, then furthest from the minimum

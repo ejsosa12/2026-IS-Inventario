@@ -40,6 +40,10 @@ export const routes: Routes = [
         path: 'products/add-product', canActivate: [adminGuard], loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
       },
       {
+        // HU-21 (mínimo) and HU-02 (precios): owner only
+        path: 'products/edit-product/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/edit-product/edit-product').then(e => e.EditProduct)
+      },
+      {
         path: 'suppliers', loadComponent: () => import('./utils/suppliers/suppliers').then(s => s.Suppliers)
       },
       {

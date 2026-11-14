@@ -49,6 +49,35 @@ export interface LowStockItem {
   agotado: boolean; // existencia is 0
 }
 
+// HU-02: one price change, made by the owner in "Editar producto"
+export interface PriceChange {
+  id: number;
+  tipo: 'venta' | 'compra';
+  precio_anterior: number | null; // null = it had no purchase price yet
+  precio_nuevo: number;
+  fecha: string; // ISO datetime
+  usuario: string;
+}
+
+// GET /api/v1/products/<id> (owner only): what the edit page needs
+export interface ProductDetail extends Product {
+  precio_compra: number | null; // per base unit; each invoice updates it
+  presentaciones: (NewPresentation & { id: number })[];
+  tiene_movimientos: boolean; // then unidad_base cannot change
+  historial_precios: PriceChange[];
+}
+
+// What PUT /api/v1/edit-product/<id> takes (HU-21 mínimo, HU-02 precios)
+export interface EditProductRequest {
+  codigo: string;
+  nombre: string;
+  categoria_id: number | null;
+  unidad_base: UnidadBase;
+  stock_minimo: number | null;
+  precio: number;
+  precio_compra: number | null;
+}
+
 // One row of GET /api/v1/products
 export interface ProductListItem extends Product {
   categoria: string | null;

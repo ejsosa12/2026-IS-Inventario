@@ -217,7 +217,8 @@ class AccessData:
     def get_product_by_id(self, product_id):
         """Devuelve el producto como dict, o None si no existe."""
         query = """
-            SELECT id, codigo, nombre, precio, unidad_base, stock_minimo, activo, categoria_id
+            SELECT id, codigo, nombre, precio, precio_compra, unidad_base, stock_minimo, activo,
+                   categoria_id
             FROM products
             WHERE id = %(id)s
         """
@@ -262,6 +263,75 @@ class AccessData:
                 conn.rollback()
                 raise
             return new_id
+
+    def product_code_taken(self, codigo, exclude_id):
+        """True si OTRO producto ya usa ese código (al editar, el propio no cuenta)."""
+        query = "SELECT 1 FROM products WHERE codigo = %(codigo)s AND id <> %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"codigo": codigo, "id": exclude_id})
+                return cursor.fetchone() is not None
+
+    def product_has_movements(self, product_id):
+        """True si el producto ya tuvo entradas o salidas (entonces su unidad no se cambia)."""
+        query = "SELECT 1 FROM movements WHERE producto_id = %(id)s LIMIT 1"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": product_id})
+                return cursor.fetchone() is not None
+
+    def update_product(self, product_id, fields, usuario_id):
+        """HU-21 / HU-02: guarda los cambios del producto y deja anotado cada cambio de precio.
+
+        fields: codigo, nombre, categoria_id, unidad_base, stock_minimo, precio, precio_compra.
+        Product and price history are saved together. Lanza IntegrityError si el código se repite.
+        """
+        update_query = """
+            UPDATE products
+            SET codigo = %(codigo)s, nombre = %(nombre)s, categoria_id = %(categoria_id)s,
+                unidad_base = %(unidad_base)s, stock_minimo = %(stock_minimo)s,
+                precio = %(precio)s, precio_compra = %(precio_compra)s
+            WHERE id = %(id)s
+        """
+        history_query = """
+            INSERT INTO price_history (producto_id, tipo, precio_anterior, precio_nuevo, usuario_id)
+            VALUES (%(producto_id)s, %(tipo)s, %(anterior)s, %(nuevo)s, %(usuario_id)s)
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    # Lock the row: the old prices read here are the ones being replaced
+                    cursor.execute(
+                        "SELECT precio, precio_compra FROM products WHERE id = %(id)s FOR UPDATE",
+                        {"id": product_id},
+                    )
+                    old = cursor.fetchone()
+                    cursor.execute(update_query, {**fields, "id": product_id})
+                    for tipo, column in (("venta", "precio"), ("compra", "precio_compra")):
+                        if fields[column] is not None and fields[column] != old[column]:
+                            cursor.execute(history_query, {
+                                "producto_id": product_id, "tipo": tipo,
+                                "anterior": old[column], "nuevo": fields[column],
+                                "usuario_id": usuario_id,
+                            })
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+    def get_price_history(self, product_id):
+        """HU-02: los cambios de precio del producto, el más reciente primero."""
+        query = """
+            SELECT h.id, h.tipo, h.precio_anterior, h.precio_nuevo, h.fecha, u.nombre AS usuario
+            FROM price_history h
+            JOIN users u ON u.users = h.usuario_id
+            WHERE h.producto_id = %(id)s
+            ORDER BY h.fecha DESC, h.id DESC
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": product_id})
+                return cursor.fetchall()
 
     def get_presentations_by_product(self, product_id):
         """Devuelve las presentaciones de un producto, de la más chica a la más grande."""
@@ -411,6 +481,12 @@ class AccessData:
                             "proveedor_id": proveedor_id,
                             "entrada_id": entry_id,
                         })
+                        # HU-02: the invoice price becomes the product's purchase price.
+                        # No price_history row: the invoice itself records who, when and how much
+                        cursor.execute(
+                            "UPDATE products SET precio_compra = %(precio)s WHERE id = %(producto_id)s",
+                            item,
+                        )
                 conn.commit()
             except Exception:
                 # If one product fails, the invoice is not saved half done
@@ -498,19 +574,14 @@ class AccessData:
 
     @staticmethod
     def _last_purchase_price(cursor, producto_id):
-        """Price per base unit of the most recent 'entrada' of the product, or None.
+        """The product's purchase price per base unit (HU-02), or None if it was never bought.
 
-        Saved on outputs so later reports can tell how much money was lost (merma)
-        or used inside the store (uso interno).
+        Each invoice updates it and the owner can correct it. Saved on outputs so later
+        reports can tell how much money was lost (merma) or used inside the store (uso interno).
         """
-        cursor.execute("""
-            SELECT precio FROM movements
-            WHERE producto_id = %(id)s AND tipo = 'entrada' AND precio IS NOT NULL
-            ORDER BY fecha DESC, id DESC
-            LIMIT 1
-        """, {"id": producto_id})
+        cursor.execute("SELECT precio_compra FROM products WHERE id = %(id)s", {"id": producto_id})
         row = cursor.fetchone()
-        return row["precio"] if row else None
+        return row["precio_compra"] if row else None
 
     def add_output(self, tipo, producto_id, cantidad, motivo, usuario_id):
         """Guarda una salida ('dano' o 'uso') con su costo y devuelve su id.

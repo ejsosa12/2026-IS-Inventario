@@ -1,1 +1,222 @@
-<p>edit-product works!</p>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-900">Editar Producto</h1>
+        <p class="text-gray-600 text-sm mt-1">
+          @if (product(); as p) {
+            {{ p.codigo }} · {{ p.nombre }}
+          } @else {
+            Cambiar datos, mínimo y precios
+          }
+        </p>
+      </div>
+      <a routerLink="/content/products"
+         class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        Volver a productos
+      </a>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    @if (loading()) {
+      <p class="text-sm text-gray-700">Cargando producto...</p>
+    } @else if (!product()) {
+      <p class="max-w-3xl px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</p>
+    } @else {
+
+      <div class="max-w-3xl bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Datos del producto</h3>
+          <p class="text-gray-600 text-sm">Los campos con * son obligatorios</p>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="save()" class="p-6 space-y-6">
+          @if (saved()) {
+            <div class="px-4 py-3 rounded-lg bg-green-100 text-green-800 text-sm font-medium">{{ saved() }}</div>
+          }
+          @if (error()) {
+            <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</div>
+          }
+
+          <!-- Código y nombre -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label for="codigo" class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
+              <input id="codigo" type="text" formControlName="codigo"
+                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              @if (invalid('codigo')) {
+                <p class="mt-1 text-xs text-red-600">El código es obligatorio (máx. 30 caracteres)</p>
+              }
+            </div>
+            <div class="md:col-span-2">
+              <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <input id="nombre" type="text" formControlName="nombre"
+                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              @if (invalid('nombre')) {
+                <p class="mt-1 text-xs text-red-600">El nombre es obligatorio (máx. 100 caracteres)</p>
+              }
+            </div>
+          </div>
+
+          <!-- Unidad y categoría -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label for="unidad_base" class="block text-sm font-medium text-gray-700 mb-1">Se vende por *</label>
+              <select id="unidad_base" formControlName="unidad_base"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white disabled:bg-gray-100 disabled:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                @for (unidad of unidades; track unidad.value) {
+                  <option [value]="unidad.value">{{ unidad.label }}</option>
+                }
+              </select>
+              @if (product()!.tiene_movimientos) {
+                <p class="mt-1 text-xs text-gray-500">No se puede cambiar: el producto ya tiene entradas o salidas</p>
+              }
+            </div>
+            <div>
+              <label for="categoria_id" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+              <select id="categoria_id" formControlName="categoria_id"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                <option [ngValue]="null">Sin categoría</option>
+                @for (category of categories(); track category.id) {
+                  <option [ngValue]="category.id">{{ category.nombre }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <!-- HU-21: stock mínimo -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-gray-200">
+            <div>
+              <label for="stock_minimo" class="block text-sm font-medium text-gray-700 mb-1">Stock mínimo ({{ unidad }})</label>
+              <input id="stock_minimo" type="number" formControlName="stock_minimo" min="0" [step]="stockStep"
+                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              @if (invalid('stock_minimo')) {
+                <p class="mt-1 text-xs text-red-600">No puede ser negativo</p>
+              }
+            </div>
+            <p class="md:col-span-2 self-end text-sm text-gray-500">
+              Cuando la existencia llegue a este número, el producto aparece en el aviso del inicio.
+              Si lo deja vacío, el producto no genera alertas.
+            </p>
+          </div>
+
+          <!-- HU-02: precios -->
+          <div class="pt-4 border-t border-gray-200 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label for="precio" class="block text-sm font-medium text-gray-700 mb-1">Precio de venta (Q por {{ unidad }}) *</label>
+                <input id="precio" type="number" formControlName="precio" min="0" step="0.01"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                @if (invalid('precio')) {
+                  <p class="mt-1 text-xs text-red-600">Ingrese un precio de 0 o más</p>
+                }
+              </div>
+              <div>
+                <label for="precio_compra" class="block text-sm font-medium text-gray-700 mb-1">Precio de compra (Q por {{ unidad }})</label>
+                <input id="precio_compra" type="number" formControlName="precio_compra" min="0" step="0.0001"
+                       [placeholder]="product()!.precio_compra === null ? 'Todavía no se ha comprado' : ''"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                @if (invalid('precio_compra')) {
+                  <p class="mt-1 text-xs text-red-600">No puede ser negativo</p>
+                }
+              </div>
+              <div class="self-end pb-2">
+                @if (margin; as m) {
+                  @if (m.amount < 0) {
+                    <p class="text-sm font-medium text-red-700">
+                      Pierde Q{{ -m.amount | number: '1.2-2' }} por {{ unidad }}
+                    </p>
+                  } @else {
+                    <p class="text-sm text-gray-700">
+                      Gana Q{{ m.amount | number: '1.2-2' }} por {{ unidad }}
+                      @if (m.percent !== null) {
+                        <span class="text-gray-500">({{ m.percent | number: '1.0-1' }} %)</span>
+                      }
+                    </p>
+                  }
+                }
+              </div>
+            </div>
+            <p class="text-sm text-gray-500">
+              El precio de compra se actualiza solo con cada factura que se ingresa. Aquí se puede corregir.
+              Cada cambio de precio queda anotado abajo con quién lo hizo y cuándo.
+            </p>
+          </div>
+
+          <!-- HU-06: presentations, only shown here -->
+          <div class="pt-4 border-t border-gray-200">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">Se compra en</h4>
+            @for (p of product()!.presentaciones; track p.id) {
+              <span class="inline-block mr-2 mb-2 px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700">
+                1 {{ p.nombre }} = {{ p.factor }} {{ unidadLabel[product()!.unidad_base] }}
+              </span>
+            } @empty {
+              <p class="text-sm text-gray-400">Sin presentaciones: se compra en la misma unidad en que se vende.</p>
+            }
+          </div>
+
+          <!-- Botones -->
+          <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <a routerLink="/content/products"
+               class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              Cancelar
+            </a>
+            <button type="submit" [disabled]="saving()"
+                    class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
+              {{ saving() ? 'Guardando...' : 'Guardar cambios' }}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- HU-02: who changed a price, when, and what it was before -->
+      <div class="max-w-3xl bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Cambios de precio</h3>
+        <div class="overflow-auto border border-gray-200 rounded-lg">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Antes</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ahora</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quién</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              @for (change of product()!.historial_precios; track change.id) {
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ change.fecha | date: 'dd/MM/yyyy HH:mm' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold"
+                          [class]="change.tipo === 'venta' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'">
+                      {{ change.tipo === 'venta' ? 'Venta' : 'Compra' }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    @if (change.precio_anterior !== null) {
+                      Q{{ change.precio_anterior | number: '1.2-4' }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">Q{{ change.precio_nuevo | number: '1.2-4' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ change.usuario }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">Todavía no se le ha cambiado el precio.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+
+  </main>
+</div>
