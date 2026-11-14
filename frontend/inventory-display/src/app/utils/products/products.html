@@ -159,7 +159,7 @@
                                     @if (isAdmin()) {
                                       <a [routerLink]="['edit-product', product.id]"
                                          class="px-3 py-1 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
-                                        Editar
+                                            <i class="fas fa-edit"></i>
                                       </a>
                                     }
                                     @if (product.activo && product.existencia > 0) {
