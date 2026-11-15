@@ -134,18 +134,32 @@ create table entries(
 	-- Cuándo se registró en el sistema y quién (HU-11)
 	fecha datetime not null default current_timestamp,
 	usuario_id int not null,
+	-- HU-14: una entrada equivocada no se borra, se anula: cuándo, quién y por qué
+	anulada_en datetime,
+	anulada_por int,
+	motivo_anulacion varchar(200),
+	-- La calcula la base: el número mientras la entrada sirve, NULL si está anulada.
+	-- MariaDB no tiene UNIQUE con WHERE; así una factura anulada se puede ingresar de nuevo
+	factura_vigente varchar(30) as (if(anulada_en is null, numero_factura, null)) persistent,
 	PRIMARY KEY(id),
-	-- La misma factura del mismo proveedor no se ingresa dos veces
-	UNIQUE(proveedor_id, numero_factura),
+	-- La misma factura del mismo proveedor no se ingresa dos veces (mientras no esté anulada)
+	CONSTRAINT uq_entries_factura_vigente UNIQUE(proveedor_id, factura_vigente),
+	-- Una entrada anulada siempre dice quién y por qué
+	CONSTRAINT chk_entries_anulada CHECK (
+		anulada_en IS NULL
+		OR (anulada_por IS NOT NULL AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')
+	),
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),
-	FOREIGN KEY(usuario_id) REFERENCES users(users)
+	FOREIGN KEY(usuario_id) REFERENCES users(users),
+	CONSTRAINT fk_entries_anulada_por FOREIGN KEY(anulada_por) REFERENCES users(users)
 );
 
 -- HU-11, HU-12, HU-15, HU-16, HU-17, HU-28
 -- Todo cambio de existencia pasa por aquí
 create table movements(
 	id int AUTO_INCREMENT not null,
-	tipo enum('entrada', 'venta', 'dano', 'uso') not null,
+	-- HU-14: 'anulacion' resta lo que sumó una entrada anulada (no se borra nada)
+	tipo enum('entrada', 'venta', 'dano', 'uso', 'anulacion') not null,
 	-- Siempre en unidad base y siempre positiva: el tipo dice si suma o resta.
 	-- En una entrada es lo que llegó de verdad (HU-12)
 	cantidad decimal(10,3) not null check (cantidad > 0),
@@ -156,21 +170,22 @@ create table movements(
 	-- En daño y uso interno, el último precio de compra (para saber cuánto se perdió)
 	-- 4 decimales: Q100 el rollo de 30 m = Q3.3333 por metro
 	precio decimal(12,4) check (precio >= 0),
-	-- HU-16 y HU-17: por qué salió (se rompió, para qué se usó). NULL en entradas y ventas
+	-- HU-16 y HU-17: por qué salió (se rompió, para qué se usó). HU-14: por qué se anuló.
+	-- NULL en entradas y ventas
 	motivo varchar(200),
 	fecha datetime not null default current_timestamp,
 	producto_id int not null,
 	usuario_id int not null,
 	-- Solo las entradas tienen proveedor
 	proveedor_id int,
-	-- HU-11: factura a la que pertenece. NULL fuera de entradas
+	-- HU-11: factura a la que pertenece (también en su anulación, HU-14). NULL en el resto
 	entrada_id int,
 	-- HU-06: en qué presentación llegó (caja, rollo). NULL = en unidad base
 	presentacion_id int,
 	PRIMARY KEY(id),
-	-- Daño y uso interno siempre llevan motivo
+	-- Daño, uso interno y anulación siempre llevan motivo
 	CONSTRAINT chk_movements_motivo
-		CHECK (tipo NOT IN ('dano', 'uso') OR (motivo IS NOT NULL AND motivo <> '')),
+		CHECK (tipo NOT IN ('dano', 'uso', 'anulacion') OR (motivo IS NOT NULL AND motivo <> '')),
 	FOREIGN KEY(producto_id) REFERENCES products(id),
 	FOREIGN KEY(usuario_id) REFERENCES users(users),
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),

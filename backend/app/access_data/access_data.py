@@ -15,6 +15,21 @@ class InsufficientStock(Exception):
         self.existencia = existencia
 
 
+class NegativeStock(Exception):
+    """HU-14 + HU-18: voiding or correcting an entry would leave some product below 0.
+
+    productos: dicts with producto_id, codigo, nombre, unidad_base, existencia and quedaria.
+    """
+
+    def __init__(self, productos):
+        super().__init__("stock would be negative")
+        self.productos = productos
+
+
+class EntryAlreadyVoided(Exception):
+    """HU-14: the entry is already voided (maybe someone else voided it a moment ago)."""
+
+
 class AccessData:
     """Acceso a la base de datos MySQL local.
 
@@ -485,57 +500,72 @@ class AccessData:
                 cursor.execute(query, {"id": presentation_id})
                 return cursor.fetchone()
 
-    def entry_exists(self, proveedor_id, numero_factura):
-        """True si esa factura de ese proveedor ya fue ingresada."""
+    def entry_exists(self, proveedor_id, numero_factura, exclude_id=None):
+        """True si esa factura de ese proveedor ya fue ingresada y no está anulada.
+
+        HU-14: a voided invoice can be entered again. exclude_id is the entry being corrected.
+        """
         query = """
             SELECT 1 FROM entries
-            WHERE proveedor_id = %(proveedor_id)s AND numero_factura = %(numero_factura)s
+            WHERE proveedor_id = %(proveedor_id)s AND factura_vigente = %(numero_factura)s
+              AND (%(exclude)s IS NULL OR id <> %(exclude)s)
         """
         with self._connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(query, {"proveedor_id": proveedor_id, "numero_factura": numero_factura})
+                cursor.execute(query, {
+                    "proveedor_id": proveedor_id, "numero_factura": numero_factura,
+                    "exclude": exclude_id,
+                })
                 return cursor.fetchone() is not None
+
+    @staticmethod
+    def _insert_entry(cursor, proveedor_id, numero_factura, fecha_factura, usuario_id, items):
+        """Inserts the invoice header and one 'entrada' per line. Returns the entry id.
+
+        items: dicts with producto_id, presentacion_id, cantidad, cantidad_factura and precio,
+        already converted to the base unit. Must run inside a transaction.
+        """
+        cursor.execute("""
+            INSERT INTO entries (proveedor_id, numero_factura, fecha_factura, usuario_id)
+            VALUES (%(proveedor_id)s, %(numero_factura)s, %(fecha_factura)s, %(usuario_id)s)
+        """, {
+            "proveedor_id": proveedor_id,
+            "numero_factura": numero_factura,
+            "fecha_factura": fecha_factura,
+            "usuario_id": usuario_id,
+        })
+        entry_id = cursor.lastrowid
+        for item in items:
+            cursor.execute("""
+                INSERT INTO movements (tipo, cantidad, cantidad_factura, precio, producto_id,
+                                       usuario_id, proveedor_id, entrada_id, presentacion_id)
+                VALUES ('entrada', %(cantidad)s, %(cantidad_factura)s, %(precio)s, %(producto_id)s,
+                        %(usuario_id)s, %(proveedor_id)s, %(entrada_id)s, %(presentacion_id)s)
+            """, {
+                **item,
+                "usuario_id": usuario_id,
+                "proveedor_id": proveedor_id,
+                "entrada_id": entry_id,
+            })
+            # HU-02: the invoice price becomes the product's purchase price.
+            # No price_history row: the invoice itself records who, when and how much
+            cursor.execute(
+                "UPDATE products SET precio_compra = %(precio)s WHERE id = %(producto_id)s",
+                item,
+            )
+        return entry_id
 
     def add_entry(self, proveedor_id, numero_factura, fecha_factura, usuario_id, items):
         """Guarda la factura y un movimiento 'entrada' por producto. Todo o nada.
 
-        items: dicts with producto_id, presentacion_id, cantidad, cantidad_factura and precio,
-        already converted to the base unit.
-        Lanza pymysql.err.IntegrityError si la factura ya existe.
-        """
-        entry_query = """
-            INSERT INTO entries (proveedor_id, numero_factura, fecha_factura, usuario_id)
-            VALUES (%(proveedor_id)s, %(numero_factura)s, %(fecha_factura)s, %(usuario_id)s)
-        """
-        movement_query = """
-            INSERT INTO movements (tipo, cantidad, cantidad_factura, precio, producto_id,
-                                   usuario_id, proveedor_id, entrada_id, presentacion_id)
-            VALUES ('entrada', %(cantidad)s, %(cantidad_factura)s, %(precio)s, %(producto_id)s,
-                    %(usuario_id)s, %(proveedor_id)s, %(entrada_id)s, %(presentacion_id)s)
+        Lanza pymysql.err.IntegrityError si la factura ya existe (y no está anulada).
         """
         with self._connection() as conn:
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute(entry_query, {
-                        "proveedor_id": proveedor_id,
-                        "numero_factura": numero_factura,
-                        "fecha_factura": fecha_factura,
-                        "usuario_id": usuario_id,
-                    })
-                    entry_id = cursor.lastrowid
-                    for item in items:
-                        cursor.execute(movement_query, {
-                            **item,
-                            "usuario_id": usuario_id,
-                            "proveedor_id": proveedor_id,
-                            "entrada_id": entry_id,
-                        })
-                        # HU-02: the invoice price becomes the product's purchase price.
-                        # No price_history row: the invoice itself records who, when and how much
-                        cursor.execute(
-                            "UPDATE products SET precio_compra = %(precio)s WHERE id = %(producto_id)s",
-                            item,
-                        )
+                    entry_id = self._insert_entry(
+                        cursor, proveedor_id, numero_factura, fecha_factura, usuario_id, items
+                    )
                 conn.commit()
             except Exception:
                 # If one product fails, the invoice is not saved half done
@@ -543,23 +573,35 @@ class AccessData:
                 raise
             return entry_id
 
+    # Header columns shared by the entry list and the entry detail
+    ENTRY_COLUMNS = """
+        e.id, e.numero_factura, e.fecha_factura, e.fecha,
+        e.proveedor_id, s.nombre AS proveedor,
+        e.usuario_id, u.nombre AS usuario,
+        e.anulada_en, e.anulada_por AS anulada_por_id, ua.nombre AS anulada_por,
+        e.motivo_anulacion
+    """
+
     def get_entries(self, only_with_shortages=False):
         """Devuelve las facturas ingresadas, la más reciente primero.
 
         con_faltantes is 1 when some product arrived in a different quantity than the invoice (HU-12).
+        HU-14: voided entries are listed too (with who, when and why), except with only_with_shortages.
         """
-        query = """
-            SELECT e.id, e.numero_factura, e.fecha_factura, e.fecha,
-                   e.proveedor_id, s.nombre AS proveedor,
-                   e.usuario_id, u.nombre AS usuario,
+        query = f"""
+            SELECT {self.ENTRY_COLUMNS},
                    COUNT(m.id) AS total_productos,
                    MAX(m.cantidad_factura <> m.cantidad) AS con_faltantes
             FROM entries e
             JOIN suppliers s ON s.id = e.proveedor_id
             JOIN users u ON u.users = e.usuario_id
-            LEFT JOIN movements m ON m.entrada_id = e.id
-            GROUP BY e.id, s.nombre, u.nombre
+            LEFT JOIN users ua ON ua.users = e.anulada_por
+            -- Only the 'entrada' rows: the 'anulacion' rows of a voided entry are not products
+            LEFT JOIN movements m ON m.entrada_id = e.id AND m.tipo = 'entrada'
         """
+        if only_with_shortages:
+            query += " WHERE e.anulada_en IS NULL"
+        query += " GROUP BY e.id, s.nombre, u.nombre, ua.nombre"
         if only_with_shortages:
             query += " HAVING con_faltantes = 1"
         query += " ORDER BY e.fecha DESC, e.id DESC"
@@ -570,13 +612,12 @@ class AccessData:
 
     def get_entry_by_id(self, entry_id):
         """Devuelve la factura con sus productos, o None si no existe."""
-        entry_query = """
-            SELECT e.id, e.numero_factura, e.fecha_factura, e.fecha,
-                   e.proveedor_id, s.nombre AS proveedor,
-                   e.usuario_id, u.nombre AS usuario
+        entry_query = f"""
+            SELECT {self.ENTRY_COLUMNS}
             FROM entries e
             JOIN suppliers s ON s.id = e.proveedor_id
             JOIN users u ON u.users = e.usuario_id
+            LEFT JOIN users ua ON ua.users = e.anulada_por
             WHERE e.id = %(id)s
         """
         items_query = """
@@ -586,7 +627,7 @@ class AccessData:
             FROM movements m
             JOIN products p ON p.id = m.producto_id
             LEFT JOIN presentations pr ON pr.id = m.presentacion_id
-            WHERE m.entrada_id = %(id)s
+            WHERE m.entrada_id = %(id)s AND m.tipo = 'entrada'
             ORDER BY m.id
         """
         with self._connection() as conn:
@@ -600,8 +641,176 @@ class AccessData:
                 return entry
 
     # ------------------------------------------------------------
+    # HU-14: void or correct an entry. Nothing is deleted: each line gets an
+    # 'anulacion' movement that subtracts it, and the entry is marked as voided
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _lock_entry_lines(cursor, entry_id):
+        """Locks the entry until commit and returns its 'entrada' lines.
+
+        Raises EntryAlreadyVoided if it was voided (two people voiding it at the same time).
+        """
+        cursor.execute(
+            "SELECT anulada_en FROM entries WHERE id = %(id)s FOR UPDATE", {"id": entry_id}
+        )
+        entry = cursor.fetchone()
+        if entry is None or entry["anulada_en"] is not None:
+            raise EntryAlreadyVoided()
+        cursor.execute("""
+            SELECT id, producto_id, presentacion_id, proveedor_id, cantidad, precio, fecha
+            FROM movements
+            WHERE entrada_id = %(id)s AND tipo = 'entrada'
+            ORDER BY id
+        """, {"id": entry_id})
+        return cursor.fetchall()
+
+    def _check_stock_change(self, cursor, changes):
+        """HU-18 for HU-14: the stock never goes below 0.
+
+        changes: {producto_id: Decimal}, what each product gains (+) or loses (-).
+        Locks every product that loses stock, in id order so two transactions never wait
+        on each other, and raises NegativeStock listing the ones that would end below 0.
+        """
+        problems = []
+        for producto_id in sorted(changes):
+            if changes[producto_id] >= 0:
+                continue
+            existencia = self._lock_stock(cursor, producto_id)
+            if existencia + changes[producto_id] < 0:
+                problems.append({
+                    "producto_id": producto_id,
+                    "existencia": existencia,
+                    "quedaria": existencia + changes[producto_id],
+                })
+        if problems:
+            cursor.execute(
+                "SELECT id, codigo, nombre, unidad_base FROM products WHERE id IN %(ids)s",
+                {"ids": [p["producto_id"] for p in problems]},
+            )
+            products = {row["id"]: row for row in cursor.fetchall()}
+            for problem in problems:
+                product = products[problem["producto_id"]]
+                problem.update(
+                    codigo=product["codigo"], nombre=product["nombre"],
+                    unidad_base=product["unidad_base"],
+                )
+            raise NegativeStock(problems)
+
+    @staticmethod
+    def _restore_purchase_price(cursor, line):
+        """Point 6 of HU-14: after voiding, put back the price of the last valid invoice.
+
+        Only when this voided line is what set the current purchase price: no valid invoice
+        of the product came after it and the owner did not change the price by hand since.
+        If there is no other valid invoice, the price is left as it is.
+        """
+        params = {"producto_id": line["producto_id"], "line_id": line["id"], "fecha": line["fecha"]}
+        cursor.execute("""
+            SELECT 1 FROM movements m
+            JOIN entries e ON e.id = m.entrada_id
+            WHERE m.producto_id = %(producto_id)s AND m.tipo = 'entrada'
+              AND e.anulada_en IS NULL AND m.id > %(line_id)s
+            UNION ALL
+            SELECT 1 FROM price_history
+            WHERE producto_id = %(producto_id)s AND tipo = 'compra' AND fecha > %(fecha)s
+            LIMIT 1
+        """, params)
+        if cursor.fetchone() is not None:
+            return
+        cursor.execute("""
+            SELECT m.precio FROM movements m
+            JOIN entries e ON e.id = m.entrada_id
+            WHERE m.producto_id = %(producto_id)s AND m.tipo = 'entrada' AND e.anulada_en IS NULL
+            ORDER BY m.id DESC
+            LIMIT 1
+        """, params)
+        previous = cursor.fetchone()
+        if previous is not None:
+            cursor.execute(
+                "UPDATE products SET precio_compra = %(precio)s WHERE id = %(producto_id)s",
+                {"precio": previous["precio"], "producto_id": line["producto_id"]},
+            )
+
+    def _void_lines(self, cursor, entry_id, lines, usuario_id, motivo):
+        """One 'anulacion' per line (same quantity, so the stock goes back), the entry marked as
+        voided with who and why, and the purchase price put back. Must run inside a transaction."""
+        for line in lines:
+            cursor.execute("""
+                INSERT INTO movements (tipo, cantidad, precio, motivo, producto_id, usuario_id,
+                                       proveedor_id, entrada_id, presentacion_id)
+                VALUES ('anulacion', %(cantidad)s, %(precio)s, %(motivo)s, %(producto_id)s,
+                        %(usuario_id)s, %(proveedor_id)s, %(entrada_id)s, %(presentacion_id)s)
+            """, {
+                **line, "motivo": motivo, "usuario_id": usuario_id, "entrada_id": entry_id,
+            })
+        # factura_vigente becomes NULL by itself, so the invoice number is free again
+        cursor.execute("""
+            UPDATE entries
+            SET anulada_en = NOW(), anulada_por = %(usuario_id)s, motivo_anulacion = %(motivo)s
+            WHERE id = %(id)s
+        """, {"id": entry_id, "usuario_id": usuario_id, "motivo": motivo})
+        for line in lines:
+            self._restore_purchase_price(cursor, line)
+
+    def void_entry(self, entry_id, usuario_id, motivo):
+        """HU-14: voids an entry. Todo o nada.
+
+        Raises EntryAlreadyVoided, or NegativeStock if part of it was already taken out.
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    lines = self._lock_entry_lines(cursor, entry_id)
+                    changes = {}
+                    for line in lines:
+                        changes[line["producto_id"]] = (
+                            changes.get(line["producto_id"], 0) - line["cantidad"]
+                        )
+                    self._check_stock_change(cursor, changes)
+                    self._void_lines(cursor, entry_id, lines, usuario_id, motivo)
+                conn.commit()
+            except Exception:
+                # Also releases the locks
+                conn.rollback()
+                raise
+
+    def correct_entry(self, entry_id, usuario_id, motivo,
+                      proveedor_id, numero_factura, fecha_factura, items):
+        """HU-14: voids the entry and saves the corrected one, in one transaction.
+
+        The stock check uses the net result (entered 100 instead of 10 and 5 were taken out:
+        95 - 100 + 10 = 5, fine). Returns the new entry id. Raises EntryAlreadyVoided,
+        NegativeStock, or pymysql.err.IntegrityError if the invoice number is taken.
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    lines = self._lock_entry_lines(cursor, entry_id)
+                    changes = {}
+                    for line in lines:
+                        changes[line["producto_id"]] = (
+                            changes.get(line["producto_id"], 0) - line["cantidad"]
+                        )
+                    for item in items:
+                        changes[item["producto_id"]] = (
+                            changes.get(item["producto_id"], 0) + item["cantidad"]
+                        )
+                    self._check_stock_change(cursor, changes)
+                    # Void first: the corrected invoice usually has the same number
+                    self._void_lines(cursor, entry_id, lines, usuario_id, motivo)
+                    new_id = self._insert_entry(
+                        cursor, proveedor_id, numero_factura, fecha_factura, usuario_id, items
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            return new_id
+
+    # ------------------------------------------------------------
     # Outputs (HU-16 merma; HU-17 uso interno later; sales come from billing, see
-    # facturación-conditions.txt). HU-18: never leave the stock below zero
+    # facturacion-conditions.txt). HU-18: never leave the stock below zero
     # ------------------------------------------------------------
 
     @staticmethod

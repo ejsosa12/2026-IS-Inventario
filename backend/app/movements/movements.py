@@ -4,7 +4,7 @@ from decimal import Decimal
 from flask import Blueprint, g, request
 import pymysql
 
-from app.access_data import AccessData, InsufficientStock
+from app.access_data import AccessData, EntryAlreadyVoided, InsufficientStock, NegativeStock
 from app.catalog.catalog import _to_decimal
 from app.security import requiere_rol
 
@@ -25,6 +25,9 @@ def _entry_to_json(entry):
         **entry,
         "fecha_factura": entry["fecha_factura"].isoformat(),
         "fecha": entry["fecha"].isoformat(),
+        # HU-14: voided entries stay, marked with who, when and why
+        "anulada": entry["anulada_en"] is not None,
+        "anulada_en": entry["anulada_en"].isoformat() if entry["anulada_en"] else None,
     }
     if "con_faltantes" in entry:
         data["con_faltantes"] = bool(entry["con_faltantes"])
@@ -50,9 +53,11 @@ def _item_to_json(item):
     }
 
 
-def _validate_item(access, raw, position):
+def _validate_item(access, raw, position, keep_product_ids=()):
     """Checks one invoice line and converts it to the base unit.
 
+    keep_product_ids: products of the entry being corrected (HU-14); they are accepted even if
+    they were deactivated after the invoice arrived.
     Returns (item, None) when it is fine or (None, error response) when it is not.
     """
     prefix = f"producto {position}: "
@@ -66,7 +71,7 @@ def _validate_item(access, raw, position):
     if product is None:
         return None, _error(prefix + "product does not exist", 404)
     # HU-04: a product that was taken off the catalog does not receive stock
-    if not product["activo"]:
+    if not product["activo"] and producto_id not in keep_product_ids:
         return None, _error(prefix + "product is not active")
 
     # HU-06: quantities and price come as on the invoice (2 cajas at Q400 each)
@@ -116,55 +121,100 @@ def _validate_item(access, raw, position):
     }, None
 
 
-@movements.route('api/v1/add-entry', methods=['POST'])
-@requiere_rol()  # HU-11: Kevin and Byron (employees) receive the truck too
-def add_entry():
-    body = request.get_json(silent=True)
+def _read_entry(access, body, original=None):
+    """Validates the invoice header and its lines (shared by add-entry and correct-entry).
 
-    if not body:
-        return _error("entry data is required")
+    original: the entry being corrected (HU-14). It may keep its supplier and its products
+    even if they were deactivated later, and its own invoice number is not a duplicate.
+    Returns (fields, None) when it is fine or (None, error response) when it is not.
+    """
+    if not isinstance(body, dict) or not body:
+        return None, _error("entry data is required")
 
     proveedor_id = body.get("proveedor_id")
     numero_factura = str(body.get("numero_factura") or "").strip()
     items_raw = body.get("productos")
 
     if not isinstance(proveedor_id, int) or isinstance(proveedor_id, bool):
-        return _error("proveedor_id is required")
+        return None, _error("proveedor_id is required")
     if not numero_factura:
-        return _error("numero_factura is required")
+        return None, _error("numero_factura is required")
     if len(numero_factura) > 30:
-        return _error("numero_factura must have at most 30 characters")
+        return None, _error("numero_factura must have at most 30 characters")
 
     try:
         fecha_factura = date.fromisoformat(str(body.get("fecha_factura") or ""))
     except ValueError:
-        return _error("fecha_factura must be a date like 2026-11-10")
+        return None, _error("fecha_factura must be a date like 2026-11-10")
     if fecha_factura > date.today():
-        return _error("fecha_factura cannot be in the future")
+        return None, _error("fecha_factura cannot be in the future")
 
     if not isinstance(items_raw, list) or len(items_raw) == 0:
-        return _error("at least one product is required")
+        return None, _error("at least one product is required")
 
-    access = AccessData()
     supplier = access.get_supplier_by_id(proveedor_id)
     if supplier is None:
-        return _error("supplier does not exist", 404)
+        return None, _error("supplier does not exist", 404)
     # HU-09: a deactivated supplier does not receive new invoices
-    if not supplier["activo"]:
-        return _error("supplier is not active")
-    if access.entry_exists(proveedor_id, numero_factura):
-        return _error("this invoice from this supplier was already entered", 409)
+    keeps_supplier = original is not None and proveedor_id == original["proveedor_id"]
+    if not supplier["activo"] and not keeps_supplier:
+        return None, _error("supplier is not active")
+    exclude_id = original["id"] if original else None
+    if access.entry_exists(proveedor_id, numero_factura, exclude_id):
+        return None, _error("this invoice from this supplier was already entered", 409)
 
+    keep_product_ids = {p["producto_id"] for p in original["productos"]} if original else set()
     items = []
     for position, raw in enumerate(items_raw, start=1):
-        item, error = _validate_item(access, raw, position)
+        item, error = _validate_item(access, raw, position, keep_product_ids)
         if error:
-            return error
+            return None, error
         items.append(item)
+
+    return {
+        "proveedor_id": proveedor_id,
+        "numero_factura": numero_factura,
+        "fecha_factura": fecha_factura,
+        "items": items,
+    }, None
+
+
+def _read_motivo(body):
+    """HU-14: why the entry is voided or corrected. Required, at most 200 characters."""
+    motivo = str(body.get("motivo") or "").strip() if isinstance(body, dict) else ""
+    if not motivo:
+        return None, _error("motivo is required")
+    if len(motivo) > 200:
+        return None, _error("motivo must have at most 200 characters")
+    return motivo, None
+
+
+def _negative_stock(error):
+    """HU-18 for HU-14: Angular lists which products would end below 0."""
+    return {
+        "status": 1,
+        "message": "stock would be negative",
+        "data": {
+            "productos": [
+                {**p, "existencia": float(p["existencia"]), "quedaria": float(p["quedaria"])}
+                for p in error.productos
+            ],
+        },
+    }, 409
+
+
+@movements.route('api/v1/add-entry', methods=['POST'])
+@requiere_rol()  # HU-11: Kevin and Byron (employees) receive the truck too
+def add_entry():
+    access = AccessData()
+    fields, error = _read_entry(access, request.get_json(silent=True))
+    if error:
+        return error
 
     try:
         entry_id = access.add_entry(
-            proveedor_id, numero_factura, fecha_factura, g.user["users"], items
+            fields["proveedor_id"], fields["numero_factura"], fields["fecha_factura"],
+            g.user["users"], fields["items"],
         )
     except pymysql.err.IntegrityError:
         # Two people saving the same invoice at the same time
@@ -174,6 +224,75 @@ def add_entry():
         "status": 0,
         "message": "SUCCESS: entry created",
         "data": _entry_to_json(access.get_entry_by_id(entry_id)),
+    }, 201
+
+
+@movements.route('api/v1/void-entry/<int:entry_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-14: only the owner voids entries
+def void_entry(entry_id):
+    motivo, error = _read_motivo(request.get_json(silent=True))
+    if error:
+        return error
+
+    access = AccessData()
+    entry = access.get_entry_by_id(entry_id)
+    if entry is None:
+        return _error("entry does not exist", 404)
+    if entry["anulada_en"] is not None:
+        return _error("entry is already voided")
+
+    try:
+        access.void_entry(entry_id, g.user["users"], motivo)
+    except EntryAlreadyVoided:
+        return _error("entry is already voided")
+    except NegativeStock as error:
+        # Part of it was already taken out: use correct-entry instead
+        return _negative_stock(error)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: entry voided",
+        "data": _entry_to_json(access.get_entry_by_id(entry_id)),
+    }, 200
+
+
+@movements.route('api/v1/correct-entry/<int:entry_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-14: only the owner corrects entries
+def correct_entry(entry_id):
+    body = request.get_json(silent=True)
+    motivo, error = _read_motivo(body)
+    if error:
+        return error
+
+    access = AccessData()
+    entry = access.get_entry_by_id(entry_id)
+    if entry is None:
+        return _error("entry does not exist", 404)
+    if entry["anulada_en"] is not None:
+        return _error("entry is already voided")
+
+    fields, error = _read_entry(access, body, original=entry)
+    if error:
+        return error
+
+    try:
+        new_id = access.correct_entry(
+            entry_id, g.user["users"], motivo,
+            fields["proveedor_id"], fields["numero_factura"], fields["fecha_factura"],
+            fields["items"],
+        )
+    except EntryAlreadyVoided:
+        return _error("entry is already voided")
+    except NegativeStock as error:
+        return _negative_stock(error)
+    except pymysql.err.IntegrityError:
+        return _error("this invoice from this supplier was already entered", 409)
+
+    # The corrected entry is a new one; the old one stays voided
+    return {
+        "status": 0,
+        "message": "SUCCESS: entry corrected",
+        "data": _entry_to_json(access.get_entry_by_id(new_id)),
     }, 201
 
 
