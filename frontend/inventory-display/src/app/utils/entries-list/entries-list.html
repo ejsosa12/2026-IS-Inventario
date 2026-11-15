@@ -43,6 +43,9 @@
 
   <main class="flex-1 min-h-0 flex flex-col p-6">
     <div class="flex-1 min-h-0 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      @if (notice()) {
+        <p class="mb-4 px-4 py-3 rounded-lg bg-green-100 text-green-800 text-sm font-medium">{{ notice() }}</p>
+      }
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-lg font-semibold text-gray-900">
           {{ onlyShortages() ? 'Entradas con faltantes' : 'Todas las entradas' }}
@@ -76,12 +79,16 @@
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresada</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productos</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                  @if (isAdmin()) {
+                    <th class="px-6 py-3"><span class="sr-only">Acciones</span></th>
+                  }
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 @for (entry of entries(); track entry.id) {
+                  <!-- HU-14: voided entries stay in the list, greyed out -->
                   <tr (click)="toggle(entry)" class="cursor-pointer hover:bg-gray-50"
-                      [class.bg-blue-50]="openId() === entry.id">
+                      [class.bg-blue-50]="openId() === entry.id" [class.text-gray-400]="entry.anulada">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       <span class="inline-block w-4 text-gray-400">{{ openId() === entry.id ? '▾' : '▸' }}</span>
                       {{ entry.numero_factura }}
@@ -95,7 +102,11 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.total_productos }}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      @if (entry.con_faltantes) {
+                      @if (entry.anulada) {
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">
+                          Anulada
+                        </span>
+                      } @else if (entry.con_faltantes) {
                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
                           Con faltantes
                         </span>
@@ -105,12 +116,35 @@
                         </span>
                       }
                     </td>
+                    <!-- HU-14: owner only. stopPropagation so the row does not open -->
+                    @if (isAdmin()) {
+                      <td class="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2" (click)="$event.stopPropagation()">
+                        @if (!entry.anulada) {
+                          <a [routerLink]="['/content/entries/correct', entry.id]"
+                             class="px-3 py-1 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                            Corregir
+                          </a>
+                          <button type="button" (click)="openVoid(entry)"
+                                  class="px-3 py-1 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors">
+                            Anular
+                          </button>
+                        }
+                      </td>
+                    }
                   </tr>
 
                   <!-- Products of the opened entry -->
                   @if (openId() === entry.id) {
                     <tr>
-                      <td colspan="6" class="px-6 py-4 bg-gray-50">
+                      <td [attr.colspan]="isAdmin() ? 7 : 6" class="px-6 py-4 bg-gray-50">
+                        <!-- HU-14: who voided it, when and why -->
+                        @if (entry.anulada) {
+                          <p class="mb-3 px-4 py-3 rounded-lg bg-gray-200 text-gray-800 text-sm">
+                            <span class="font-semibold">Anulada</span>
+                            el {{ entry.anulada_en | date: 'dd/MM/yyyy HH:mm' }} por {{ entry.anulada_por }}:
+                            {{ entry.motivo_anulacion }}
+                          </p>
+                        }
                         @if (detailLoading()) {
                           <p class="text-sm text-gray-500">Cargando productos...</p>
                         } @else if (detail(); as detail) {
@@ -173,4 +207,53 @@
       </div>
     </div>
   </main>
+
+  <!-- HU-14: void an entry (owner only). It is not deleted: it stays marked with who and why -->
+  @if (voiding(); as entry) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" (click)="closeVoid()">
+      <form (submit)="$event.preventDefault(); confirmVoid()" (click)="$event.stopPropagation()"
+            class="w-full max-w-md bg-white rounded-xl shadow-xl">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Anular entrada</h3>
+          <p class="text-gray-600 text-sm">
+            Factura {{ entry.numero_factura }} · {{ entry.proveedor }} · {{ invoiceDate(entry.fecha_factura) }}
+          </p>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <p class="text-sm text-gray-700">
+            La existencia de sus {{ entry.total_productos }} producto(s) regresa a como estaba antes.
+            La entrada no se borra: queda marcada como anulada, con quién y por qué.
+          </p>
+          @if (voidError()) {
+            <p class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ voidError() }}</p>
+          }
+          <div>
+            <label for="void-reason" class="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <input id="void-reason" type="text" [maxLength]="MOTIVO_MAX" placeholder="Ej. Factura ingresada dos veces"
+                   [value]="voidReason()" (input)="voidReason.set($any($event.target).value)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
+          <button type="button" (click)="closeVoid()"
+                  class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </button>
+          @if (voidBlocked()) {
+            <a [routerLink]="['/content/entries/correct', entry.id]"
+               class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-slate-800 transition-colors">
+              Corregir
+            </a>
+          } @else {
+            <button type="submit" [disabled]="voidSaving() || !voidReason().trim()"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+              {{ voidSaving() ? 'Anulando...' : 'Anular entrada' }}
+            </button>
+          }
+        </div>
+      </form>
+    </div>
+  }
 </div>

@@ -26,8 +26,14 @@
   <header class="bg-white shadow-sm border-b border-gray-200">
     <div class="px-6 py-4 flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-gray-900">Entradas de mercadería</h1>
-        <p class="text-gray-600 text-sm mt-1">Ingresar lo que trae el camión, producto por producto</p>
+        @if (correctId === null) {
+          <h1 class="text-2xl font-semibold text-gray-900">Entradas de mercadería</h1>
+          <p class="text-gray-600 text-sm mt-1">Ingresar lo que trae el camión, producto por producto</p>
+        } @else {
+          <!-- HU-14 -->
+          <h1 class="text-2xl font-semibold text-gray-900">Corregir entrada</h1>
+          <p class="text-gray-600 text-sm mt-1">La entrada original queda anulada y se registra esta</p>
+        }
       </div>
       <a routerLink="/content/entries-list"
          class="px-4 py-2 whitespace-nowrap text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -48,6 +54,27 @@
       </div>
     }
 
+    <!-- HU-14: what is being corrected, and why -->
+    @if (original(); as entry) {
+      <div class="bg-yellow-50 border border-yellow-300 rounded-xl p-6 space-y-4">
+        <p class="text-sm text-yellow-800">
+          Está corrigiendo la factura <span class="font-semibold">{{ entry.numero_factura }}</span>
+          de <span class="font-semibold">{{ entry.proveedor }}</span> del {{ invoiceDate(entry.fecha_factura) }},
+          ingresada por {{ entry.usuario }}. Cambie lo que esté mal y guarde: la original no se borra,
+          queda anulada con el motivo y la existencia se ajusta.
+        </p>
+        <div>
+          <label for="motivo" class="block text-sm font-medium text-gray-700 mb-1">Motivo de la corrección *</label>
+          <input id="motivo" type="text" [formControl]="motivo" maxlength="200"
+                 placeholder="Ej. Se ingresaron 100 en vez de 10"
+                 class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+          @if (motivo.invalid && motivo.touched) {
+            <p class="mt-1 text-xs text-red-600">Escriba por qué se corrige (máx. 200 caracteres)</p>
+          }
+        </div>
+      </div>
+    }
+
     <!-- HU-11: invoice data -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200">
       <div class="px-6 py-4 border-b border-gray-200">
@@ -61,8 +88,10 @@
           <select id="proveedor_id" formControlName="proveedor_id"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
             <option [ngValue]="null" disabled>Elija un proveedor</option>
-            @for (supplier of activeSuppliers(); track supplier.id) {
-              <option [ngValue]="supplier.id">{{ supplier.nombre }}</option>
+            @for (supplier of supplierOptions(); track supplier.id) {
+              <option [ngValue]="supplier.id">
+                {{ supplier.nombre }}{{ supplier.activo ? '' : ' (inactivo)' }}
+              </option>
             }
           </select>
           @if (invalid('proveedor_id')) {
@@ -108,7 +137,7 @@
           <select id="producto_id" formControlName="producto_id"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
             <option [ngValue]="null" disabled>Elija un producto</option>
-            @for (product of activeProducts(); track product.id) {
+            @for (product of productOptions(); track product.id) {
               <option [ngValue]="product.id">{{ product.codigo }} · {{ product.nombre }}</option>
             }
           </select>
@@ -225,9 +254,13 @@
           · Total según factura:
           <span class="font-semibold text-gray-900">Q {{ total() | number: '1.2-2' }}</span>
         </div>
-        <button type="button" (click)="save()" [disabled]="saving()"
+        <button type="button" (click)="save()" [disabled]="saving() || (correctId !== null && !original())"
                 class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-slate-800 disabled:opacity-60 transition-colors">
-          {{ saving() ? 'Guardando...' : 'Guardar entrada' }}
+          @if (saving()) {
+            Guardando...
+          } @else {
+            {{ correctId === null ? 'Guardar entrada' : 'Guardar corrección' }}
+          }
         </button>
       </div>
     </div>

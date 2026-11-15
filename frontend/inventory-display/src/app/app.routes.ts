@@ -64,6 +64,10 @@ export const routes: Routes = [
         path: 'entries', loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)
       },
       {
+        // HU-14: same form as entries, filled with the entry to correct. Owner only
+        path: 'entries/correct/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/entries/entries').then(e => e.Entries)
+      },
+      {
         // HU-16: merma (and HU-17 uso interno later). Any logged-in user
         path: 'outputs', loadComponent: () => import('./utils/outputs/outputs').then(o => o.Outputs)
       },

@@ -53,6 +53,27 @@ interface EntryHeader {
   proveedor: string;
   usuario_id: number;
   usuario: string;
+  // HU-14: a voided entry is never deleted; it says who voided it, when and why
+  anulada: boolean;
+  anulada_en: string | null; // ISO datetime
+  anulada_por_id: number | null;
+  anulada_por: string | null;
+  motivo_anulacion: string | null;
+}
+
+// HU-14: PUT /api/v1/correct-entry/<id>. The corrected invoice plus why
+export interface CorrectEntry extends NewEntry {
+  motivo: string;
+}
+
+// HU-14 + HU-18: in a 409 of void-entry/correct-entry, the products that would end below 0
+export interface NegativeStockItem {
+  producto_id: number;
+  codigo: string;
+  nombre: string;
+  unidad_base: UnidadBase;
+  existencia: number;
+  quedaria: number;
 }
 
 // One row of GET /api/v1/entries

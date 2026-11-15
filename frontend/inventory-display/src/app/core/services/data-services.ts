@@ -14,7 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
-import { Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
+import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
 @Service()
@@ -175,6 +175,20 @@ export class DataServices {
   getEntry(id: number) {
     return this.http
       .get<ApiResponse<Entry>>(`${this.API_URL}/entries/${id}`)
+      .pipe(map((response) => response.data as Entry));
+  }
+
+  // HU-14 (owner only): the entry stays, marked as voided; its stock goes back
+  voidEntry(id: number, motivo: string) {
+    return this.http
+      .put<ApiResponse<Entry>>(`${this.API_URL}/void-entry/${id}`, { motivo })
+      .pipe(map((response) => response.data as Entry));
+  }
+
+  // HU-14 (owner only): voids the entry and saves the corrected one. Returns the new entry
+  correctEntry(id: number, entry: CorrectEntry) {
+    return this.http
+      .put<ApiResponse<Entry>>(`${this.API_URL}/correct-entry/${id}`, entry)
       .pipe(map((response) => response.data as Entry));
   }
 }
