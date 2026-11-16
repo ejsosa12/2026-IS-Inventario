@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
 import { negativeStockMessage } from '../../core/utils/negative-stock';
@@ -28,6 +28,10 @@ export class EntriesList {
   entries = signal<EntryListItem[]>([]);
   loading = signal(true);
   error = signal<string | null>(null);
+
+  // HU-20: the kárdex links here with ?entrada=<id> to open that invoice
+  private openOnLoad: number | null =
+    Number(inject(ActivatedRoute).snapshot.queryParamMap.get('entrada')) || null;
 
   // HU-12: "entradas con faltantes"
   onlyShortages = signal(false);
@@ -132,6 +136,15 @@ export class EntriesList {
       next: (entries) => {
         this.entries.set(entries);
         this.loading.set(false);
+        const wanted = entries.find((entry) => entry.id === this.openOnLoad);
+        this.openOnLoad = null;
+        if (wanted) {
+          this.toggle(wanted);
+          // After the table renders
+          setTimeout(() =>
+            document.getElementById(`entry-${wanted.id}`)?.scrollIntoView({ block: 'center' }),
+          );
+        }
       },
       error: () => {
         this.error.set('No se pudieron cargar las entradas');

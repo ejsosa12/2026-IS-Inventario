@@ -44,6 +44,10 @@ export const routes: Routes = [
         path: 'products/edit-product/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/edit-product/edit-product').then(e => e.EditProduct)
       },
       {
+        // HU-20: kárdex of one product. Owner only
+        path: 'products/history/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/product-history/product-history').then(h => h.ProductHistory)
+      },
+      {
         path: 'suppliers', loadComponent: () => import('./utils/suppliers/suppliers').then(s => s.Suppliers)
       },
       {

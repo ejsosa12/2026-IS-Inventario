@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from flask import Blueprint, g, request
@@ -411,4 +411,113 @@ def get_outputs():
         "status": 0,
         "message": "SUCCESS: outputs",
         "data": [_output_to_json(o) for o in AccessData().get_outputs(tipos)],
+    }, 200
+
+
+# ------------------------------------------------------------
+# HU-20: kárdex of one product (owner only)
+# ------------------------------------------------------------
+
+HISTORY_PAGE_SIZES = (25, 50, 100)
+TWO_DECIMALS = Decimal("0.01")
+
+
+def _read_date(name):
+    """?desde= / ?hasta= as YYYY-MM-DD. Returns (date or None, error message or None)."""
+    value = request.args.get(name, "").strip()
+    if not value:
+        return None, None
+    try:
+        return date.fromisoformat(value), None
+    except ValueError:
+        return None, f"{name} must be a date YYYY-MM-DD"
+
+
+def _read_positive_int(name, default):
+    value = request.args.get(name, "").strip()
+    if not value:
+        return default
+    return int(value) if value.isdigit() and int(value) > 0 else None
+
+
+def _history_row_to_json(row):
+    precio = row["precio"]
+    factor = row["factor"]
+    data = {
+        "id": row["id"],
+        "tipo": row["tipo"],
+        "fecha": row["fecha"].isoformat(),
+        # Signed: + came in, - went out
+        "cantidad": float(row["cambio"]),
+        "existencia": float(row["existencia"]),
+        "usuario_id": row["usuario_id"],
+        "usuario": row["usuario"],
+        "motivo": row["motivo"],
+        "precio": float(precio) if precio is not None else None,
+        # What it was worth: paid for an entrada, purchase price for dano/uso
+        "costo": float((row["cantidad"] * precio).quantize(TWO_DECIMALS)) if precio is not None else None,
+        "proveedor_id": row["proveedor_id"],
+        "proveedor": row["proveedor"],
+        "entrada_id": row["entrada_id"],
+        "numero_factura": row["numero_factura"],
+        # Only an entrada can be voided; its 'anulacion' row is the one that takes the stock back
+        "anulada": row["tipo"] == "entrada" and bool(row["anulada"]),
+        # HU-06: "2 caja" as it came on the invoice
+        "presentacion": row["presentacion"],
+        "cantidad_presentacion": float(row["cantidad"] / factor) if factor else None,
+    }
+    return data
+
+
+@movements.route('api/v1/product-movements/<int:product_id>', methods=['GET'])
+@requiere_rol('admin')  # HU-20: Don Rigo checks who did what
+def get_product_movements(product_id):
+    desde, error = _read_date("desde")
+    if error:
+        return _error(error)
+    hasta, error = _read_date("hasta")
+    if error:
+        return _error(error)
+    if desde and hasta and desde > hasta:
+        return _error("desde must not be after hasta")
+
+    page = _read_positive_int("page", 1)
+    if page is None:
+        return _error("page must be a whole number greater than 0")
+    per_page = _read_positive_int("per_page", HISTORY_PAGE_SIZES[0])
+    if per_page not in HISTORY_PAGE_SIZES:
+        return _error("per_page must be 25, 50 or 100")
+
+    access = AccessData()
+    history = access.get_product_history(
+        product_id,
+        # desde from 00:00; hasta includes that whole day
+        desde=datetime.combine(desde, time.min) if desde else None,
+        hasta=datetime.combine(hasta + timedelta(days=1), time.min) if hasta else None,
+        limit=per_page,
+        offset=(page - 1) * per_page,
+    )
+    if history is None:
+        return _error("product does not exist", 404)
+
+    total = history["total"]
+    pages = max(1, -(-total // per_page))
+    product = history["producto"]
+    summary = history["resumen"]
+    return {
+        "status": 0,
+        "message": "SUCCESS: product movements",
+        "data": {
+            "producto": {
+                **product,
+                "activo": bool(product["activo"]),
+                "existencia": float(product["existencia"]),
+            },
+            "resumen": {key: float(value) for key, value in summary.items()},
+            "movimientos": [_history_row_to_json(row) for row in history["movimientos"]],
+            "total": total,
+            "page": page,
+            "pages": pages,
+            "per_page": per_page,
+        },
     }, 200

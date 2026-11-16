@@ -894,3 +894,71 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query, {"id": output_id})
                 return cursor.fetchone()
+
+    # ------------------------------------------------------------
+    # HU-20: kárdex. Everything that came in and went out of one product
+    # ------------------------------------------------------------
+
+    def get_product_history(self, product_id, desde=None, hasta=None, limit=25, offset=0):
+        """Devuelve el historial de un producto, o None si el producto no existe.
+
+        desde / hasta: datetimes; desde inclusive, hasta exclusive (the day after the last one).
+        Returns {"producto", "resumen", "total", "movimientos"}: resumen and total count the
+        whole date range, movimientos is only the requested page, newest first.
+        Each movement carries existencia = stock right after it. It is computed over ALL the
+        product's movements before filtering by date, so it is right on every page and range.
+        """
+        product_query = """
+            SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, c.nombre AS categoria,
+                   COALESCE((SELECT SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END)
+                             FROM movements m WHERE m.producto_id = p.id), 0) AS existencia
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            WHERE p.id = %(id)s
+        """
+        # The same date condition for the summary and the list. NULL = no limit on that side
+        in_range = "(%(desde)s IS NULL OR fecha >= %(desde)s) AND (%(hasta)s IS NULL OR fecha < %(hasta)s)"
+        summary_query = f"""
+            SELECT COALESCE(SUM(CASE WHEN fecha < %(desde)s THEN cambio END), 0) AS inicio,
+                   COALESCE(SUM(CASE WHEN {in_range} AND cambio > 0 THEN cambio END), 0) AS entro,
+                   COALESCE(SUM(CASE WHEN {in_range} AND cambio < 0 THEN -cambio END), 0) AS salio,
+                   COUNT(CASE WHEN {in_range} THEN 1 END) AS total
+            FROM (SELECT fecha, CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END AS cambio
+                  FROM movements WHERE producto_id = %(id)s) x
+        """
+        list_query = f"""
+            SELECT k.id, k.tipo, k.cantidad, k.cambio, k.existencia, k.precio, k.motivo, k.fecha,
+                   k.usuario_id, u.nombre AS usuario,
+                   k.proveedor_id, s.nombre AS proveedor,
+                   k.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada,
+                   pr.nombre AS presentacion, pr.factor
+            FROM (
+                SELECT m.*,
+                       CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END AS cambio,
+                       SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END)
+                           OVER (ORDER BY m.fecha, m.id) AS existencia
+                FROM movements m
+                WHERE m.producto_id = %(id)s
+            ) k
+            JOIN users u ON u.users = k.usuario_id
+            LEFT JOIN suppliers s ON s.id = k.proveedor_id
+            LEFT JOIN entries e ON e.id = k.entrada_id
+            LEFT JOIN presentations pr ON pr.id = k.presentacion_id
+            WHERE {in_range.replace('fecha', 'k.fecha')}
+            ORDER BY k.fecha DESC, k.id DESC
+            LIMIT %(limit)s OFFSET %(offset)s
+        """
+        params = {"id": product_id, "desde": desde, "hasta": hasta, "limit": limit, "offset": offset}
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(product_query, params)
+                product = cursor.fetchone()
+                if product is None:
+                    return None
+                cursor.execute(summary_query, params)
+                summary = cursor.fetchone()
+                cursor.execute(list_query, params)
+                rows = cursor.fetchall()
+        total = summary.pop("total")
+        summary["final"] = summary["inicio"] + summary["entro"] - summary["salio"]
+        return {"producto": product, "resumen": summary, "total": total, "movimientos": rows}

@@ -14,6 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
+import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
@@ -190,5 +191,18 @@ export class DataServices {
     return this.http
       .put<ApiResponse<Entry>>(`${this.API_URL}/correct-entry/${id}`, entry)
       .pipe(map((response) => response.data as Entry));
+  }
+
+  // HU-20 (owner only): kárdex of one product, newest first, one page at a time
+  getProductHistory(id: number, filter: ProductHistoryFilter = {}) {
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(filter)) {
+      if (value != null && value !== '') {
+        params[key] = String(value);
+      }
+    }
+    return this.http
+      .get<ApiResponse<ProductHistory>>(`${this.API_URL}/product-movements/${id}`, { params })
+      .pipe(map((response) => response.data as ProductHistory));
   }
 }

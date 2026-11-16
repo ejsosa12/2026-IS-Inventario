@@ -185,21 +185,38 @@
                                       {{ estado(product).label }}
                                     </span>
                                   </td>
-                                  <!-- HU-16: shortcut to take it out with the product already picked -->
-                                  <td class="px-6 py-4 whitespace-nowrap text-right space-x-2">
-                                    <!-- HU-21 / HU-02: only the owner edits (mínimo, precios) -->
-                                    @if (isAdmin()) {
-                                      <a [routerLink]="['edit-product', product.id]"
-                                         class="px-3 py-1 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
-                                            <i class="fas fa-edit"></i>
-                                      </a>
-                                    }
-                                    @if (product.activo && product.existencia > 0) {
-                                      <a routerLink="/content/outputs" [queryParams]="{ producto: product.id }"
-                                         class="px-3 py-1 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors">
-                                        Sacar
-                                      </a>
-                                    }
+                                  <!-- Always the same buttons in the same place, so every row lines up -->
+                                  <td class="px-6 py-4 whitespace-nowrap text-right">
+                                    <div class="inline-flex items-center gap-2">
+                                      <!-- HU-21 / HU-02: only the owner edits (mínimo, precios) -->
+                                      @if (isAdmin()) {
+                                        <a [routerLink]="['edit-product', product.id]"
+                                           class="w-28 inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                                          <i class="fas fa-edit"></i> Editar
+                                        </a>
+                                      }
+                                      <!-- HU-16: shortcut to take it out with the product already picked.
+                                           Greyed out (not hidden) when there is nothing to take out -->
+                                      @if (product.activo && product.existencia > 0) {
+                                        <a routerLink="/content/outputs" [queryParams]="{ producto: product.id }"
+                                           class="w-28 inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors">
+                                          <i class="fas fa-arrow-down"></i> Sacar
+                                        </a>
+                                      } @else {
+                                        <span aria-disabled="true"
+                                              [title]="product.activo ? 'Sin existencia' : 'Producto inactivo'"
+                                              class="w-28 inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-gray-200 text-gray-400 bg-gray-50 rounded-lg cursor-not-allowed select-none">
+                                          <i class="fas fa-arrow-down"></i> Sacar
+                                        </span>
+                                      }
+                                      <!-- HU-20: kárdex, owner only -->
+                                      @if (isAdmin()) {
+                                        <a [routerLink]="['history', product.id]"
+                                           class="w-28 inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-blue-300 text-blue-800 rounded-lg hover:bg-blue-50 transition-colors">
+                                          <i class="fas fa-history"></i> Historial
+                                        </a>
+                                      }
+                                    </div>
                                   </td>
                                 </tr>
                               } @empty {
