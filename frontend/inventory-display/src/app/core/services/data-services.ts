@@ -14,6 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
+import { InventoryValue } from '../../models/report';
 import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
@@ -204,5 +205,12 @@ export class DataServices {
     return this.http
       .get<ApiResponse<ProductHistory>>(`${this.API_URL}/product-movements/${id}`, { params })
       .pipe(map((response) => response.data as ProductHistory));
+  }
+
+  // HU-26 (owner only): stock × purchase price, per product, per category and in total
+  getInventoryValue() {
+    return this.http
+      .get<ApiResponse<InventoryValue>>(`${this.API_URL}/inventory-value`)
+      .pipe(map((response) => response.data as InventoryValue));
   }
 }

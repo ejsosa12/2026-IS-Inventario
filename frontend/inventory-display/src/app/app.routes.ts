@@ -82,8 +82,16 @@ export const routes: Routes = [
         path: 'outputs', loadComponent: () => import('./utils/outputs/outputs').then(o => o.Outputs)
       },
       {
+        // HU-26 (and future reports): money, owner only
+        path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
+      },
+      {
         // HU-05: only the owner manages categories
         path: 'categories', canActivate: [adminGuard], loadComponent: () => import('./utils/categories/categories').then(c => c.Categories)
+      },
+      {
+        // HU-05: only the owner manages categories
+        path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },
     ]
   },

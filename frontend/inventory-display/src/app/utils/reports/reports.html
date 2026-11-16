@@ -1,1 +1,232 @@
-<p>reports works!</p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4">
+      <h1 class="text-2xl font-semibold text-gray-900">Análisis</h1>
+      <p class="text-gray-600 text-sm mt-1">Cuánto dinero hay en bodega, al precio de compra</p>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    @if (loading()) {
+      <p class="text-sm text-gray-700">Calculando el valor del inventario...</p>
+    } @else if (error()) {
+      <p class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</p>
+    } @else if (report(); as r) {
+
+      <!-- HU-26: cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-600">Dinero en bodega</p>
+            <p class="text-4xl font-bold text-gray-900 mt-2">Q{{ r.total | number: '1.2-2' }}</p>
+            <p class="text-sm text-gray-500 mt-2">Existencia × precio de compra de cada producto</p>
+          </div>
+          <div class="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center">
+            <i class="fas fa-coins text-green-600 text-2xl"></i>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-600">Productos con existencia</p>
+            <p class="text-4xl font-bold text-gray-900 mt-2">{{ r.productos_con_existencia }}</p>
+            <p class="text-sm text-gray-500 mt-2">{{ plural(r.por_categoria.length, 'categoría', 'categorías') }}</p>
+          </div>
+          <div class="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center">
+            <i class="fas fa-box text-purple-600 text-2xl"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Products with stock but no purchase price: the total does not include them -->
+      @if (r.sin_precio.length) {
+        <div class="px-5 py-4 rounded-xl border bg-yellow-50 border-yellow-300 text-yellow-800 space-y-2">
+          <p class="font-medium">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            {{ plural(r.sin_precio.length, 'producto con existencia no tiene', 'productos con existencia no tienen') }}
+            precio de compra · el total no los incluye
+          </p>
+          <ul class="text-sm space-y-1 pl-7">
+            @for (p of r.sin_precio; track p.id) {
+              <li>
+                {{ p.codigo }} · {{ p.nombre }} ({{ amount(p) }})
+                <a [routerLink]="['/content/products/edit-product', p.id]"
+                   class="ml-2 font-semibold underline hover:text-yellow-900">Ponerle precio</a>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Per category -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Por categoría</h3>
+          <p class="text-gray-600 text-sm">Haga clic en una categoría para ver solo sus productos abajo</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="categoryAria('categoria')">
+                  <button type="button" (click)="sortCategories('categoria')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Categoría <i [class]="categoryIcon('categoria')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="categoryAria('productos')">
+                  <button type="button" (click)="sortCategories('productos')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Productos <i [class]="categoryIcon('productos')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="categoryAria('valor')">
+                  <button type="button" (click)="sortCategories('valor')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Valor <i [class]="categoryIcon('valor')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">% del total</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+              @for (c of categories(); track c.categoria_id) {
+                <tr (click)="pickCategory(c)" class="cursor-pointer hover:bg-gray-50"
+                    [class.bg-blue-50]="category() === categoryName(c)">
+                  <td class="px-6 py-3 font-medium text-gray-900">{{ categoryName(c) }}</td>
+                  <td class="px-6 py-3 text-gray-700">
+                    {{ c.productos }}
+                    @if (c.sin_precio) {
+                      <span class="ml-1 text-xs text-yellow-700">({{ c.sin_precio }} sin precio)</span>
+                    }
+                  </td>
+                  <td class="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Q{{ c.valor | number: '1.2-2' }}</td>
+                  <td class="px-6 py-3">
+                    <div class="flex items-center gap-3">
+                      <div class="flex-1 bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-800 h-2 rounded-full" [style.width.%]="c.porcentaje"></div>
+                      </div>
+                      <span class="w-14 text-right text-gray-600">{{ c.porcentaje | number: '1.1-1' }} %</span>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="4" class="px-6 py-8 text-center text-gray-500">No hay productos con existencia</td>
+                </tr>
+              }
+            </tbody>
+            @if (categories().length) {
+              <tfoot class="bg-gray-50 text-sm font-semibold text-gray-900">
+                <tr>
+                  <td class="px-6 py-3">Total</td>
+                  <td class="px-6 py-3">{{ r.productos_con_existencia }}</td>
+                  <td class="px-6 py-3 whitespace-nowrap">Q{{ r.total | number: '1.2-2' }}</td>
+                  <td class="px-6 py-3"></td>
+                </tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      </div>
+
+      <!-- Per product -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Por producto</h3>
+            <p class="text-gray-600 text-sm">
+              {{ plural(products().length, 'producto', 'productos') }} · Q{{ shownTotal() | number: '1.2-2' }}
+            </p>
+          </div>
+          <select aria-label="Filtrar por categoría"
+                  [value]="category()" (change)="category.set($any($event.target).value)"
+                  class="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            <option value="">Todas las categorías</option>
+            @for (name of categoryOptions(); track name) {
+              <option [value]="name" [selected]="name === category()">{{ name }}</option>
+            }
+          </select>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="productAria('nombre')">
+                  <button type="button" (click)="sortProducts('nombre')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Producto <i [class]="productIcon('nombre')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="productAria('categoria')">
+                  <button type="button" (click)="sortProducts('categoria')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Categoría <i [class]="productIcon('categoria')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="productAria('existencia')">
+                  <button type="button" (click)="sortProducts('existencia')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Existencia <i [class]="productIcon('existencia')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="productAria('precio_compra')">
+                  <button type="button" (click)="sortProducts('precio_compra')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Precio de compra <i [class]="productIcon('precio_compra')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="productAria('valor')">
+                  <button type="button" (click)="sortProducts('valor')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Valor <i [class]="productIcon('valor')"></i>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+              @for (p of products(); track p.id) {
+                <tr class="hover:bg-gray-50">
+                  <td class="px-6 py-3">
+                    <div class="font-medium text-gray-900">
+                      {{ p.nombre }}
+                      @if (!p.activo) {
+                        <span class="ml-1 inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactivo</span>
+                      }
+                    </div>
+                    <div class="text-gray-500">{{ p.codigo }}</div>
+                  </td>
+                  <td class="px-6 py-3 text-gray-500">{{ categoryName(p) }}</td>
+                  <td class="px-6 py-3 text-gray-900 whitespace-nowrap">{{ amount(p) }}</td>
+                  <td class="px-6 py-3 whitespace-nowrap">
+                    @if (p.precio_compra != null) {
+                      Q{{ p.precio_compra | number: '1.2-4' }} / {{ unidadLabel[p.unidad_base] }}
+                    } @else {
+                      <a [routerLink]="['/content/products/edit-product', p.id]"
+                         class="text-yellow-700 font-medium hover:underline">Sin precio · ponerle</a>
+                    }
+                  </td>
+                  <td class="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">
+                    @if (p.valor != null) { Q{{ p.valor | number: '1.2-2' }} } @else { <span class="text-gray-400">—</span> }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="px-6 py-8 text-center text-gray-500">No hay productos con existencia</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  </main>
+</div>

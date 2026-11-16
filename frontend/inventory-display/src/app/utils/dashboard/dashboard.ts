@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
@@ -12,7 +14,7 @@ const DISMISSED_KEY = 'lowStockDismissed';
 
 // The first page after logging in. HU-22: it says right away what is running out
 @Component({
-  imports: [RouterLink],
+  imports: [RouterLink, DecimalPipe],
   selector: 'app-dashboard',
   templateUrl: './dashboard.html',
 })
@@ -84,7 +86,16 @@ export class Dashboard {
     this.dismissed.set(true);
   }
 
+  // HU-26: money in the store, only for the owner (HU-29). null = not loaded / not allowed
+  isAdmin = inject(AuthService).isAdmin;
+  inventoryValue = signal<number | null>(null);
+
   constructor() {
+    if (this.isAdmin()) {
+      this.dataServices.getInventoryValue().subscribe({
+        next: (report) => this.inventoryValue.set(report.total),
+      });
+    }
     this.dataServices.getLowStock().subscribe({
       next: (items) => {
         this.lowStock.set(items);

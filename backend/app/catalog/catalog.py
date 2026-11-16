@@ -474,3 +474,66 @@ def get_presentations():
         "message": "SUCCESS: presentations",
         "data": presentations,
     }, 200
+
+
+# ------------------------------------------------------------
+# HU-26: how much money is in the store. Owner only (HU-29: money)
+# ------------------------------------------------------------
+
+@catalog.route('api/v1/inventory-value', methods=['GET'])
+@requiere_rol('admin')
+def get_inventory_value():
+    """existencia × precio_compra per product, total per category and grand total.
+
+    Products without a purchase price are left out of the totals and listed in sin_precio,
+    so the owner knows the total is missing them (instead of counting them as Q0).
+    """
+    cents = Decimal("0.01")
+    productos, sin_precio = [], []
+    categorias = {}
+    total = Decimal(0)
+
+    for row in AccessData().get_stock_with_cost():
+        precio = row["precio_compra"]
+        valor = (row["existencia"] * precio).quantize(cents) if precio is not None else None
+        product = {
+            **row,
+            "activo": bool(row["activo"]),
+            "existencia": float(row["existencia"]),
+            "precio_compra": float(precio) if precio is not None else None,
+            "valor": float(valor) if valor is not None else None,
+        }
+        productos.append(product)
+
+        category = categorias.setdefault(row["categoria_id"], {
+            "categoria_id": row["categoria_id"],
+            "categoria": row["categoria"],
+            "productos": 0,
+            "valor": Decimal(0),
+            "sin_precio": 0,
+        })
+        category["productos"] += 1
+        if valor is None:
+            category["sin_precio"] += 1
+            sin_precio.append(product)
+        else:
+            category["valor"] += valor
+            total += valor
+
+    por_categoria = sorted(categorias.values(), key=lambda c: c["valor"], reverse=True)
+    for category in por_categoria:
+        category["porcentaje"] = float(category["valor"] / total * 100) if total else 0.0
+        category["valor"] = float(category["valor"])
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: inventory value",
+        "data": {
+            "total": float(total),
+            "productos_con_existencia": len(productos),
+            "por_categoria": por_categoria,
+            # Most valuable first; the ones without price at the end
+            "productos": sorted(productos, key=lambda p: (p["valor"] is None, -(p["valor"] or 0))),
+            "sin_precio": sin_precio,
+        },
+    }, 200

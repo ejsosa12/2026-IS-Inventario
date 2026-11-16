@@ -962,3 +962,31 @@ class AccessData:
         total = summary.pop("total")
         summary["final"] = summary["inicio"] + summary["entro"] - summary["salio"]
         return {"producto": product, "resumen": summary, "total": total, "movimientos": rows}
+
+    # ------------------------------------------------------------
+    # HU-26: how much money is in the store (stock × purchase price)
+    # ------------------------------------------------------------
+
+    def get_stock_with_cost(self):
+        """Products that have stock, with their category and purchase price (NULL = unknown).
+
+        Inactive products are included: the merchandise is still on the shelf.
+        """
+        query = """
+            SELECT * FROM (
+                SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.precio_compra,
+                       p.categoria_id, c.nombre AS categoria,
+                       COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+                           AS existencia
+                FROM products p
+                LEFT JOIN categories c ON c.id = p.categoria_id
+                LEFT JOIN movements m ON m.producto_id = p.id
+                GROUP BY p.id, c.nombre
+            ) s
+            WHERE s.existencia > 0
+            ORDER BY s.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
