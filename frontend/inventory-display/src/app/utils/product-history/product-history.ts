@@ -11,6 +11,7 @@ import {
   ProductMovement,
 } from '../../models/movement';
 import { UnidadBase } from '../../models/product';
+import { SupplierPurchase } from '../../models/supplier';
 
 type Shortcut = '7' | '30' | 'todo';
 
@@ -48,6 +49,8 @@ export class ProductHistory {
   ];
 
   history = signal<History | null>(null);
+  // HU-10: who has brought this product and at what price (cheapest last price first)
+  suppliers = signal<SupplierPurchase[] | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
 
@@ -115,6 +118,10 @@ export class ProductHistory {
   private request?: Subscription;
 
   constructor() {
+    this.dataServices.getProductSuppliers(this.productId).subscribe({
+      next: (suppliers) => this.suppliers.set(suppliers),
+      error: () => this.suppliers.set([]),
+    });
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const desde = this.validDate(params.get('desde'));
       const hasta = this.validDate(params.get('hasta'));
@@ -266,5 +273,16 @@ export class ProductHistory {
         // 401 is handled by the auth-interceptor (sends you to login)
         return 'No se pudo cargar el historial';
     }
+  }
+
+  // HU-10: YYYY-MM-DD → dd/MM/yyyy by hand (DatePipe would read it as UTC)
+  invoiceDate(date: string): string {
+    return date.split('-').reverse().join('/');
+  }
+
+  // HU-10: "Q8.00 por lb" (4 decimals only when needed: Q3.3333/m)
+  supplierPrice(p: SupplierPurchase): string {
+    const decimals = Math.abs(p.precio * 100 - Math.round(p.precio * 100)) < 1e-6 ? 2 : 4;
+    return `Q${p.precio.toFixed(decimals)} por ${this.unidadLabel[p.unidad_base]}`;
   }
 }

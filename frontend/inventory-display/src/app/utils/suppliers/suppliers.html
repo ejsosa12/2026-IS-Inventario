@@ -147,6 +147,12 @@
                                   <!-- HU-29: only the owner edits or deactivates -->
                                   @if (isAdmin()) {
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
+                                      <!-- HU-10: what this supplier brings and at what price -->
+                                      <a [routerLink]="['products', supplier.id]"
+                                         class="px-3 py-1 border border-blue-300 text-blue-700 rounded-lg
+                                         hover:bg-blue-50 transition-colors">
+                                            Productos
+                                      </a>
                                       <a [routerLink]="['edit-supplier', supplier.id]"
                                          class="px-3 py-1 border border-gray-300 text-gray-700 rounded-lg
                                          hover:bg-gray-100 transition-colors">

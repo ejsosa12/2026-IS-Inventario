@@ -11,7 +11,7 @@ import {
   ProductDetail,
   ProductListItem,
 } from '../../models/product';
-import { NewSupplier, Supplier } from '../../models/supplier';
+import { NewSupplier, Supplier, SupplierProducts, SupplierPurchase } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { InitialLoadResult } from '../../models/initial-load';
@@ -301,5 +301,19 @@ export class DataServices {
     const form = new FormData();
     form.append('archivo', file, file.name);
     return form;
+  }
+
+  // HU-10 (owner only): what a supplier has brought, with the last price of each product
+  getSupplierProducts(id: number) {
+    return this.http
+      .get<ApiResponse<SupplierProducts>>(`${this.API_URL}/suppliers/${id}/products`)
+      .pipe(map((response) => response.data as SupplierProducts));
+  }
+
+  // HU-10 (owner only): who has brought a product and at what price, cheapest first
+  getProductSuppliers(id: number) {
+    return this.http
+      .get<ApiResponse<SupplierPurchase[]>>(`${this.API_URL}/products/${id}/suppliers`)
+      .pipe(map((response) => response.data as SupplierPurchase[]));
   }
 }

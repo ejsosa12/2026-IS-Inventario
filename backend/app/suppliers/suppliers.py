@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from flask import Blueprint, request
 import pymysql
 
@@ -139,3 +141,84 @@ def set_supplier_status(supplier_id):
         "message": "SUCCESS: supplier " + ("activated" if activo else "deactivated"),
         "data": _supplier_to_json(access.get_supplier_by_id(supplier_id)),
     }, 200
+
+
+# ------------------------------------------------------------
+# HU-10 (owner only): what each supplier brings and at what price
+# ------------------------------------------------------------
+
+def _purchase_to_json(row):
+    """One product bought from one supplier: its last purchase and how it compares to the one before.
+
+    precio is per base unit (Q8.00/lb); precio_presentacion is as on the invoice (Q400 per caja).
+    cambio is the % against the previous purchase from the same supplier (None if there is none).
+    """
+    precio = row["precio"]
+    anterior = row["precio_anterior"]
+    factor = row["factor"]
+    cambio = None
+    if anterior is not None and anterior > 0:
+        cambio = round(float((precio - anterior) / anterior * 100), 1)
+    return {
+        "producto_id": row["producto_id"],
+        "codigo": row["codigo"],
+        "nombre": row["nombre"],
+        "unidad_base": row["unidad_base"],
+        "activo": bool(row["activo"]),
+        "categoria": row["categoria"],
+        "proveedor_id": row["proveedor_id"],
+        "proveedor": row["proveedor"],
+        "proveedor_activo": bool(row["proveedor_activo"]),
+        "telefono": row["telefono"],
+        "precio": float(precio),
+        "presentacion": row["presentacion"],
+        "factor": float(factor) if factor is not None else None,
+        "precio_presentacion": float((precio * factor).quantize(Decimal("0.01"))) if factor else None,
+        # YYYY-MM-DD as printed on the invoice (a date, not a datetime)
+        "fecha_factura": row["fecha_factura"].isoformat(),
+        "numero_factura": row["numero_factura"],
+        "entrada_id": row["entrada_id"],
+        "precio_anterior": float(anterior) if anterior is not None else None,
+        "fecha_anterior": row["fecha_anterior"].isoformat() if row["fecha_anterior"] else None,
+        "cambio": cambio,
+        "veces": row["veces"],
+        "total": float(row["total"]),
+    }
+
+
+@suppliers.route('api/v1/suppliers/<int:supplier_id>/products', methods=['GET'])
+@requiere_rol('admin')  # HU-10 / HU-29: purchase prices are for the owner
+def get_supplier_products(supplier_id):
+    access = AccessData()
+    supplier = access.get_supplier_by_id(supplier_id)
+    if supplier is None:
+        return _error("supplier does not exist", 404)
+    summary = access.get_supplier_invoice_summary(supplier_id)
+    productos = [_purchase_to_json(row) for row in access.get_supplier_products(supplier_id)]
+    return {
+        "status": 0,
+        "message": "SUCCESS: supplier products",
+        "data": {
+            "proveedor": _supplier_to_json(supplier),
+            "resumen": {
+                "productos": len(productos),
+                "facturas": summary["facturas"],
+                "ultima_compra": summary["ultima_compra"].isoformat() if summary["ultima_compra"] else None,
+            },
+            "productos": productos,
+        },
+    }, 200
+
+
+@suppliers.route('api/v1/products/<int:product_id>/suppliers', methods=['GET'])
+@requiere_rol('admin')  # HU-10: from a product, who has brought it and at what price
+def get_product_suppliers(product_id):
+    access = AccessData()
+    if access.get_product_by_id(product_id) is None:
+        return _error("product does not exist", 404)
+    proveedores = [_purchase_to_json(row) for row in access.get_product_suppliers(product_id)]
+    # The cheapest LAST price (several suppliers may tie)
+    cheapest = min((p["precio"] for p in proveedores), default=None)
+    for p in proveedores:
+        p["mas_barato"] = len(proveedores) > 1 and p["precio"] == cheapest
+    return {"status": 0, "message": "SUCCESS: product suppliers", "data": proveedores}, 200

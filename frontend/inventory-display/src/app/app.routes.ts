@@ -54,6 +54,10 @@ export const routes: Routes = [
         path: 'suppliers/add-supplier', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
       },
       {
+        // HU-10: what a supplier brings and at what price. Owner only
+        path: 'suppliers/products/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/supplier-products/supplier-products').then(s => s.SupplierProducts)
+      },
+      {
         // HU-09: same form as add-supplier, filled with the supplier
         path: 'suppliers/edit-supplier/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/add-supplier/add-supplier').then(a => a.AddSupplier)
       },

@@ -45,6 +45,57 @@
       <p class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</p>
     }
 
+    <!-- HU-10: who brings it and at what price (last valid invoice of each supplier) -->
+    @if (suppliers(); as list) {
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Quién lo trae</h3>
+          <p class="text-sm text-gray-600">Último precio de cada proveedor, según sus facturas (las anuladas no cuentan)</p>
+        </div>
+        @if (list.length) {
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  @for (title of ['Proveedor', 'Último precio', 'Última compra', 'Veces', 'Factura']; track title) {
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ title }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                @for (s of list; track s.proveedor_id) {
+                  <tr [class.bg-green-50]="s.mas_barato">
+                    <td class="px-6 py-3">
+                      <a [routerLink]="['/content/suppliers/products', s.proveedor_id]" class="text-blue-700 hover:underline">{{ s.proveedor }}</a>
+                      @if (!s.proveedor_activo) { <span class="text-xs text-gray-500">(inactivo)</span> }
+                      @if (s.telefono) { <div class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>{{ s.telefono }}</div> }
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap">
+                      <span class="font-medium text-gray-900">{{ supplierPrice(s) }}</span>
+                      @if (s.mas_barato) {
+                        <span class="ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Más barato</span>
+                      }
+                      @if (s.presentacion && s.precio_presentacion !== null) {
+                        <div class="text-xs text-gray-500">Q{{ s.precio_presentacion | number: '1.2-2' }} por {{ s.presentacion }}</div>
+                      }
+                    </td>
+                    <td class="px-6 py-3 text-gray-700 whitespace-nowrap">{{ invoiceDate(s.fecha_factura) }}</td>
+                    <td class="px-6 py-3 text-gray-700">{{ s.veces }}</td>
+                    <td class="px-6 py-3 whitespace-nowrap">
+                      <a routerLink="/content/entries-list" [queryParams]="{ entrada: s.entrada_id }"
+                         class="text-blue-700 hover:underline">{{ s.numero_factura }}</a>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="px-6 py-6 text-sm text-gray-500">Todavía no se ha comprado con ninguna factura.</p>
+        }
+      </div>
+    }
+
     <!-- Date filter -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-4 space-y-3">
       <form (submit)="$event.preventDefault(); search()" class="flex flex-wrap items-end gap-4">

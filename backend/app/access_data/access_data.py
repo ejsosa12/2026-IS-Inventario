@@ -1358,3 +1358,68 @@ class AccessData:
             except Exception:
                 conn.rollback()
                 raise
+
+    # ------------------------------------------------------------
+    # HU-10: what each supplier brings and at what price
+    # ------------------------------------------------------------
+
+    # One row per (product, supplier) pair with its LAST purchase (n = 1) and the one before
+    # (prev, n = 2). Only valid invoices: a voided one's price no longer counts. The order is
+    # the invoice date, then the entry id (two invoices on the same day: the later one wins).
+    PURCHASES_QUERY = """
+        WITH compras AS (
+            SELECT m.producto_id, m.proveedor_id, m.precio, m.cantidad, m.presentacion_id,
+                   e.id AS entrada_id, e.numero_factura, e.fecha_factura,
+                   ROW_NUMBER() OVER (PARTITION BY m.producto_id, m.proveedor_id
+                                      ORDER BY e.fecha_factura DESC, e.id DESC, m.id DESC) AS n,
+                   COUNT(*) OVER (PARTITION BY m.producto_id, m.proveedor_id) AS veces,
+                   SUM(m.cantidad) OVER (PARTITION BY m.producto_id, m.proveedor_id) AS total
+            FROM movements m
+            JOIN entries e ON e.id = m.entrada_id
+            WHERE m.tipo = 'entrada' AND e.anulada_en IS NULL AND {where}
+        )
+        SELECT u.producto_id, p.codigo, p.nombre, p.unidad_base, p.activo, c.nombre AS categoria,
+               u.proveedor_id, s.nombre AS proveedor, s.activo AS proveedor_activo, s.telefono,
+               u.precio, pr.nombre AS presentacion, pr.factor,
+               u.entrada_id, u.numero_factura, u.fecha_factura, u.veces, u.total,
+               prev.precio AS precio_anterior, prev.fecha_factura AS fecha_anterior
+        FROM compras u
+        LEFT JOIN compras prev
+               ON prev.producto_id = u.producto_id AND prev.proveedor_id = u.proveedor_id AND prev.n = 2
+        JOIN products p ON p.id = u.producto_id
+        LEFT JOIN categories c ON c.id = p.categoria_id
+        JOIN suppliers s ON s.id = u.proveedor_id
+        LEFT JOIN presentations pr ON pr.id = u.presentacion_id
+        WHERE u.n = 1
+        ORDER BY {order}
+    """
+
+    def get_supplier_products(self, supplier_id):
+        """HU-10: the products a supplier has brought, with the last price. Newest purchase first."""
+        query = self.PURCHASES_QUERY.format(where="m.proveedor_id = %(id)s",
+                                            order="u.fecha_factura DESC, p.nombre")
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": supplier_id})
+                return cursor.fetchall()
+
+    def get_product_suppliers(self, product_id):
+        """HU-10: the suppliers that have brought a product, with their last price. Cheapest first."""
+        query = self.PURCHASES_QUERY.format(where="m.producto_id = %(id)s",
+                                            order="u.precio, u.fecha_factura DESC")
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": product_id})
+                return cursor.fetchall()
+
+    def get_supplier_invoice_summary(self, supplier_id):
+        """HU-10: how many valid invoices a supplier has and the date of the last one."""
+        query = """
+            SELECT COUNT(*) AS facturas, MAX(fecha_factura) AS ultima_compra
+            FROM entries
+            WHERE proveedor_id = %(id)s AND anulada_en IS NULL
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": supplier_id})
+                return cursor.fetchone()
