@@ -93,5 +93,8 @@ There is no backend test suite. Endpoints are checked ad hoc with `create_app().
 ### Styling quirks
 Tailwind v4 is set up through PostCSS (`src/styles.css`), but `src/index.html` also loads a Tailwind 2.2 CDN stylesheet. Many component templates were copied from a "Cordes" dashboard theme and still contain `<head>`, `<script>` and `<body>` tags. Their `<link>` tags do get added to the page when the component renders, so Font Awesome icons (including the sidebar's) only load on pages whose template has that `<head>` block; a page without it (e.g. `add-user`) loses the icons. The user is handling this. The custom `cordes-*` colors are not reliable either: use plain Tailwind color classes **that exist in Tailwind 2.2** (its default palette is gray, red, yellow, green, blue, indigo, purple, pink; e.g. `amber-*` and `orange-*` render as nothing, use `yellow-*`). Internal links should use `routerLink`, not `href`, to avoid a full page reload.
 
+### Pending reviews
+- HU-31 (inventario inicial desde Excel, built 2026-11-17): the user only skimmed it and wants to review it carefully. Remind them and walk through it with them (template, preview with row errors, all-or-nothing save, existing products without movements, the `inicial` movement, and the new Existencia inicial / Precio de compra fields in Agregar producto) before considering it closed.
+
 ### Extras
 If an user agent ask for an email, do not use my email. Instead use the next email "kkculo43@gmail.com"
