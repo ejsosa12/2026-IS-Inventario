@@ -1,0 +1,144 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4">
+      <a routerLink="/content/suppliers" class="text-sm text-blue-800 hover:underline">
+        <i class="fas fa-arrow-left mr-1"></i> Proveedores
+      </a>
+      <h1 class="text-2xl font-semibold text-gray-900 mt-1">Qué trae y a cuánto</h1>
+      <p class="text-gray-600 text-sm mt-1">Se arma solo con las facturas ingresadas; las anuladas no cuentan</p>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    @if (error()) {
+      <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</div>
+    }
+
+    @if (loading()) {
+      <p class="text-sm text-gray-700">Cargando...</p>
+    } @else if (data(); as d) {
+
+      <!-- Supplier -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-6">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">
+            {{ d.proveedor.nombre }}
+            @if (!d.proveedor.activo) {
+              <span class="ml-2 align-middle inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Inactivo</span>
+            }
+          </h2>
+          <p class="text-sm text-gray-600 mt-1">
+            @if (d.proveedor.contacto) { <i class="fas fa-user mr-1"></i>{{ d.proveedor.contacto }} · }
+            @if (d.proveedor.telefono) { <i class="fas fa-phone mr-1"></i>{{ d.proveedor.telefono }} · }
+            NIT {{ d.proveedor.nit || 'C/F' }}
+          </p>
+        </div>
+        <div class="flex gap-8">
+          <div class="text-right">
+            <p class="text-sm text-gray-500">Productos</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ d.resumen.productos }}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-gray-500">Facturas</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ d.resumen.facturas }}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-gray-500">Última compra</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ invoiceDate(d.resumen.ultima_compra) }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Products -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <h3 class="text-lg font-semibold text-gray-900">Productos que ha traído</h3>
+          @if (d.productos.length) {
+            <div class="flex flex-wrap items-center gap-4">
+              <input type="search" [value]="query()" (input)="query.set($any($event.target).value)"
+                     placeholder="Buscar producto..." aria-label="Buscar producto"
+                     class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select [value]="category()" (change)="category.set($any($event.target).value)"
+                      class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todas las categorías</option>
+                @for (cat of categories(); track cat) {
+                  <option [value]="cat">{{ cat }}</option>
+                }
+              </select>
+            </div>
+          }
+        </div>
+
+        @if (!d.productos.length) {
+          <p class="px-6 py-8 text-center text-sm text-gray-500">
+            Todavía no hay facturas de este proveedor. Cuando ingrese una, sus productos aparecen aquí.
+          </p>
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  @for (col of columns; track col.key) {
+                    <th class="px-6 py-3 text-left" [attr.aria-sort]="aria(col.key)">
+                      <button type="button" (click)="sortBy(col.key)"
+                              class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                        {{ col.label }} <i [class]="icon(col.key)"></i>
+                      </button>
+                    </th>
+                  }
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Factura</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                @for (p of shown(); track p.producto_id) {
+                  <tr>
+                    <td class="px-6 py-3">
+                      <span class="text-gray-900">{{ p.nombre }}</span>
+                      @if (!p.activo) { <span class="text-xs text-gray-500">(inactivo)</span> }
+                      <div class="text-xs text-gray-500">{{ p.codigo }}</div>
+                    </td>
+                    <td class="px-6 py-3 text-gray-700">{{ p.categoria ?? 'Sin categoría' }}</td>
+                    <td class="px-6 py-3 whitespace-nowrap">
+                      <span class="text-gray-900 font-medium">{{ unitPrice(p) }}</span>
+                      @if (p.presentacion && p.precio_presentacion !== null) {
+                        <div class="text-xs text-gray-500">Q{{ p.precio_presentacion | number: '1.2-2' }} por {{ p.presentacion }}</div>
+                      }
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap" [class]="changeClass(p.cambio)">
+                      @if (p.cambio !== null) {
+                        {{ changeText(p.cambio) }}
+                        <div class="text-xs text-gray-500 font-normal">antes Q{{ p.precio_anterior | number: '1.2-4' }} · {{ invoiceDate(p.fecha_anterior) }}</div>
+                      } @else {
+                        <span class="text-xs">Primera compra</span>
+                      }
+                    </td>
+                    <td class="px-6 py-3 text-gray-700 whitespace-nowrap">{{ invoiceDate(p.fecha_factura) }}</td>
+                    <td class="px-6 py-3 text-gray-700 whitespace-nowrap">
+                      {{ p.veces }}
+                      <div class="text-xs text-gray-500">{{ p.total | number: '1.0-3' }} {{ unidadLabel[p.unidad_base] }} en total</div>
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap">
+                      <a routerLink="/content/entries-list" [queryParams]="{ entrada: p.entrada_id }"
+                         class="text-blue-700 hover:underline">{{ p.numero_factura }}</a>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="7" class="px-6 py-6 text-center text-gray-500">Ningún producto coincide con la búsqueda</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  </main>
+</div>
