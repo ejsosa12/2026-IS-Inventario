@@ -86,6 +86,10 @@ export const routes: Routes = [
         path: 'counts', loadComponent: () => import('./utils/counts/counts').then(c => c.Counts)
       },
       {
+        // HU-33: system stock vs counted, with the money. Owner only
+        path: 'counts/compare/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/count-compare/count-compare').then(c => c.CountCompare)
+      },
+      {
         // HU-26 (and future reports): money, owner only
         path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },

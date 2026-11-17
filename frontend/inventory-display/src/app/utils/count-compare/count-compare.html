@@ -1,1 +1,165 @@
-<p>count-compare works!</p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <a routerLink="/content/counts" class="text-sm text-blue-800 hover:underline">
+          <i class="fas fa-arrow-left mr-1"></i> Conteo Físico
+        </a>
+        <h1 class="text-2xl font-semibold text-gray-900 mt-1">
+          Comparar conteo #{{ countId }}
+          @if (data(); as d) {
+            <span class="ml-2 align-middle inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                  [class]="d.estado === 'abierto' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'">
+              {{ d.estado === 'abierto' ? 'Abierto' : d.estado === 'aplicado' ? 'Aplicado' : 'Cancelado' }}
+            </span>
+          }
+        </h1>
+        <p class="text-gray-600 text-sm mt-1">Lo que dice el sistema ahora contra lo que se contó en el estante</p>
+      </div>
+      <button type="button" (click)="load()" [disabled]="loading()"
+              class="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50">
+        <i class="fas fa-sync-alt mr-1"></i> Actualizar
+      </button>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    @if (error()) {
+      <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</div>
+    }
+
+    @if (loading() && !data()) {
+      <p class="text-sm text-gray-700">Cargando...</p>
+    } @else if (data(); as d) {
+
+      <!-- Summary -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Contados</p>
+          <p class="text-2xl font-semibold text-gray-900">{{ d.resumen.contados }} de {{ d.resumen.productos }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Con diferencia</p>
+          <p class="text-2xl font-semibold text-gray-900">{{ d.resumen.con_diferencia }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Falta</p>
+          <p class="text-2xl font-semibold text-red-700">Q{{ d.resumen.faltante | number: '1.2-2' }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Sobra</p>
+          <p class="text-2xl font-semibold text-green-700">Q{{ d.resumen.sobrante | number: '1.2-2' }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Neto</p>
+          <p class="text-2xl font-semibold" [class]="d.resumen.neto < 0 ? 'text-red-700' : d.resumen.neto > 0 ? 'text-green-700' : 'text-gray-900'">
+            {{ d.resumen.neto < 0 ? '−' : '' }}Q{{ (d.resumen.neto < 0 ? -d.resumen.neto : d.resumen.neto) | number: '1.2-2' }}
+          </p>
+        </div>
+      </div>
+
+      @if (d.resumen.pendientes) {
+        <div class="px-4 py-3 rounded-lg bg-yellow-100 text-yellow-800 text-sm">
+          <i class="fas fa-exclamation-triangle mr-1"></i>
+          Faltan {{ d.resumen.pendientes }} {{ d.resumen.pendientes === 1 ? 'producto' : 'productos' }} por anotar.
+          Aparecen como "Sin contar" y no entran en los totales.
+        </div>
+      }
+      @if (d.resumen.sin_precio) {
+        <div class="px-4 py-3 rounded-lg bg-yellow-100 text-yellow-800 text-sm">
+          <i class="fas fa-exclamation-triangle mr-1"></i>
+          {{ d.resumen.sin_precio }} {{ d.resumen.sin_precio === 1 ? 'producto tiene' : 'productos tienen' }}
+          diferencia pero no precio de compra, así que su dinero no se sabe.
+        </div>
+      }
+
+      <!-- Products -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <h3 class="text-lg font-semibold text-gray-900">Productos</h3>
+          <div class="flex flex-wrap items-center gap-4">
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" [checked]="onlyDifferent()" (change)="onlyDifferent.set(!onlyDifferent())" class="w-4 h-4">
+              Solo con diferencia
+            </label>
+            <select [value]="category()" (change)="setCategory($any($event.target).value)"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Todas las categorías</option>
+              @for (cat of categories(); track cat) {
+                <option [value]="cat">{{ cat }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                @for (col of columns; track col.key) {
+                  <th class="px-6 py-3 text-left" [attr.aria-sort]="aria(col.key)">
+                    <button type="button" (click)="sortBy(col.key)"
+                            class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                      {{ col.label }} <i [class]="icon(col.key)"></i>
+                    </button>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+              @for (item of shown(); track item.producto_id) {
+                <tr [class.bg-red-50]="item.diferencia !== null && item.diferencia < 0"
+                    [class.bg-green-50]="item.diferencia !== null && item.diferencia > 0">
+                  <td class="px-6 py-3 text-gray-700 whitespace-nowrap">{{ item.codigo }}</td>
+                  <td class="px-6 py-3 text-gray-900">
+                    {{ item.nombre }}
+                    @if (!item.activo) {
+                      <span class="text-xs text-gray-500">(inactivo)</span>
+                    }
+                  </td>
+                  <td class="px-6 py-3 text-gray-700">{{ item.categoria ?? 'Sin categoría' }}</td>
+                  <td class="px-6 py-3 text-gray-900 whitespace-nowrap">{{ quantity(item.existencia, item.unidad_base) }}</td>
+                  <td class="px-6 py-3 whitespace-nowrap">
+                    @if (item.contado !== null) {
+                      <span class="text-gray-900">{{ quantity(item.contado, item.unidad_base) }}</span>
+                      <div class="text-xs text-gray-500">{{ item.contado_por }} · {{ item.contado_en | date: 'dd/MM HH:mm' }}</div>
+                    } @else {
+                      <span class="italic text-gray-400">Sin contar</span>
+                    }
+                  </td>
+                  <td class="px-6 py-3 whitespace-nowrap" [class]="differenceClass(item)">
+                    {{ item.diferencia !== null ? signed(item.diferencia, item.unidad_base) : '—' }}
+                  </td>
+                  <td class="px-6 py-3 whitespace-nowrap" [class]="differenceClass(item)">
+                    @if (item.dinero !== null) {
+                      {{ item.dinero < 0 ? '−' : item.dinero > 0 ? '+' : '' }}Q{{ (item.dinero < 0 ? -item.dinero : item.dinero) | number: '1.2-2' }}
+                    } @else if (item.diferencia) {
+                      <span class="text-xs text-gray-500 font-normal">Sin precio de compra</span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="px-6 py-6 text-center text-gray-500">
+                    {{ onlyDifferent() ? 'Ningún producto contado tiene diferencia' : 'No hay productos' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  </main>
+</div>

@@ -6,6 +6,11 @@ from contextlib import contextmanager
 import pymysql
 from pymysql.cursors import DictCursor
 
+# How one movement changes the stock (in SQL, on a `movements m` row): entrada and
+# ajuste_mas (HU-34) add; venta, dano, uso, anulacion and ajuste_menos subtract.
+# Every stock query uses this, so a new movement type is added in one place.
+STOCK_CHANGE = "CASE WHEN m.tipo IN ('entrada', 'ajuste_mas') THEN m.cantidad ELSE -m.cantidad END"
+
 
 class InsufficientStock(Exception):
     """HU-18: an output asks for more than what there is. existencia is what there is."""
@@ -32,6 +37,10 @@ class EntryAlreadyVoided(Exception):
 
 class CountAlreadyOpen(Exception):
     """HU-32: only one physical count can be open at a time (uq_counts_abierto)."""
+
+
+class CountNotOpen(Exception):
+    """HU-33: the count was applied or cancelled (maybe a moment ago), it cannot change."""
 
 
 class AccessData:
@@ -236,10 +245,10 @@ class AccessData:
         La existencia no se guarda en products: se calcula con los movimientos
         (las entradas suman; venta, daño y uso restan).
         """
-        query = """
+        query = f"""
             SELECT p.id, p.codigo, p.nombre, p.precio, p.unidad_base, p.stock_minimo, p.activo,
                    p.categoria_id, c.nombre AS categoria,
-                   COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0) AS existencia
+                   COALESCE(SUM({STOCK_CHANGE}), 0) AS existencia
             FROM products p
             LEFT JOIN categories c ON c.id = p.categoria_id
             LEFT JOIN movements m ON m.producto_id = p.id
@@ -260,11 +269,11 @@ class AccessData:
         """
         # The stock is computed in a subquery: MariaDB cannot sort by an expression
         # that uses the alias of a SUM
-        query = """
+        query = f"""
             SELECT * FROM (
                 SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.stock_minimo,
                        c.nombre AS categoria,
-                       COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+                       COALESCE(SUM({STOCK_CHANGE}), 0)
                            AS existencia
                 FROM products p
                 LEFT JOIN categories c ON c.id = p.categoria_id
@@ -826,11 +835,10 @@ class AccessData:
         Reusable by any outgoing movement (merma, uso interno, ventas).
         """
         cursor.execute("SELECT id FROM products WHERE id = %(id)s FOR UPDATE", {"id": producto_id})
-        cursor.execute("""
-            SELECT COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END), 0)
-                   AS existencia
-            FROM movements
-            WHERE producto_id = %(id)s
+        cursor.execute(f"""
+            SELECT COALESCE(SUM({STOCK_CHANGE}), 0) AS existencia
+            FROM movements m
+            WHERE m.producto_id = %(id)s
         """, {"id": producto_id})
         return cursor.fetchone()["existencia"]
 
@@ -912,9 +920,9 @@ class AccessData:
         Each movement carries existencia = stock right after it. It is computed over ALL the
         product's movements before filtering by date, so it is right on every page and range.
         """
-        product_query = """
+        product_query = f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, c.nombre AS categoria,
-                   COALESCE((SELECT SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END)
+                   COALESCE((SELECT SUM({STOCK_CHANGE})
                              FROM movements m WHERE m.producto_id = p.id), 0) AS existencia
             FROM products p
             LEFT JOIN categories c ON c.id = p.categoria_id
@@ -927,8 +935,8 @@ class AccessData:
                    COALESCE(SUM(CASE WHEN {in_range} AND cambio > 0 THEN cambio END), 0) AS entro,
                    COALESCE(SUM(CASE WHEN {in_range} AND cambio < 0 THEN -cambio END), 0) AS salio,
                    COUNT(CASE WHEN {in_range} THEN 1 END) AS total
-            FROM (SELECT fecha, CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END AS cambio
-                  FROM movements WHERE producto_id = %(id)s) x
+            FROM (SELECT m.fecha, {STOCK_CHANGE} AS cambio
+                  FROM movements m WHERE m.producto_id = %(id)s) x
         """
         list_query = f"""
             SELECT k.id, k.tipo, k.cantidad, k.cambio, k.existencia, k.precio, k.motivo, k.fecha,
@@ -938,8 +946,8 @@ class AccessData:
                    pr.nombre AS presentacion, pr.factor
             FROM (
                 SELECT m.*,
-                       CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END AS cambio,
-                       SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END)
+                       {STOCK_CHANGE} AS cambio,
+                       SUM({STOCK_CHANGE})
                            OVER (ORDER BY m.fecha, m.id) AS existencia
                 FROM movements m
                 WHERE m.producto_id = %(id)s
@@ -976,11 +984,11 @@ class AccessData:
 
         Inactive products are included: the merchandise is still on the shelf.
         """
-        query = """
+        query = f"""
             SELECT * FROM (
                 SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.precio_compra,
                        p.categoria_id, c.nombre AS categoria,
-                       COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+                       COALESCE(SUM({STOCK_CHANGE}), 0)
                            AS existencia
                 FROM products p
                 LEFT JOIN categories c ON c.id = p.categoria_id
@@ -1044,10 +1052,10 @@ class AccessData:
 
     # Products that go into a count of these categories: the active ones, and the inactive
     # ones that still have stock (they are still on the shelf)
-    COUNT_PRODUCTS_WHERE = """
-        WHERE p.categoria_id IN ({placeholders})
+    COUNT_PRODUCTS_WHERE = f"""
+        WHERE p.categoria_id IN ({{placeholders}})
           AND (p.activo = true
-               OR (SELECT COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+               OR (SELECT COALESCE(SUM({STOCK_CHANGE}), 0)
                    FROM movements m WHERE m.producto_id = p.id) > 0)
     """
 
@@ -1099,3 +1107,58 @@ class AccessData:
                 changed = cursor.execute(query, {"id": count_id, "usuario_id": usuario_id})
             conn.commit()
             return changed == 1
+
+    def save_count_items(self, count_id, items, usuario_id):
+        """HU-33: guarda lo contado de una hoja. items: {producto_id: contado or None}.
+
+        Only rows whose value actually changes are written, so saving the same sheet again
+        does not change who counted it. Raises CountNotOpen if the count is no longer open
+        (the count row is locked, so it cannot be applied or cancelled meanwhile).
+        Returns how many products changed.
+        """
+        query = """
+            UPDATE count_items
+            SET contado = %(contado)s, contado_por = %(usuario_id)s, contado_en = NOW()
+            WHERE conteo_id = %(conteo_id)s AND producto_id = %(producto_id)s
+              AND NOT (contado <=> %(contado)s)
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT estado FROM counts WHERE id = %(id)s FOR UPDATE",
+                                   {"id": count_id})
+                    row = cursor.fetchone()
+                    if row is None or row["estado"] != "abierto":
+                        raise CountNotOpen()
+                    changed = 0
+                    for producto_id, contado in items.items():
+                        changed += cursor.execute(query, {
+                            "conteo_id": count_id, "producto_id": producto_id,
+                            "contado": contado, "usuario_id": usuario_id,
+                        })
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            return changed
+
+    def get_count_compare(self, count_id):
+        """HU-33 (owner only): the products of a count with the system's stock right now
+        and the purchase price, so Flask can compute diferencia and dinero."""
+        query = f"""
+            SELECT i.id, i.producto_id, p.codigo, p.nombre, p.unidad_base, p.activo,
+                   p.categoria_id, c.nombre AS categoria, p.precio_compra,
+                   i.contado, i.contado_en, i.contado_por AS contado_por_id, u.nombre AS contado_por,
+                   COALESCE((SELECT SUM({STOCK_CHANGE}) FROM movements m
+                             WHERE m.producto_id = p.id), 0) AS existencia
+            FROM count_items i
+            JOIN products p ON p.id = i.producto_id
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            LEFT JOIN users u ON u.users = i.contado_por
+            WHERE i.conteo_id = %(id)s
+            ORDER BY c.nombre, p.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": count_id})
+                return cursor.fetchall()

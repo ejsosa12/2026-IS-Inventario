@@ -36,3 +36,34 @@ export interface CountDetail extends Count {
   items: CountItem[]; // by category, then name
   categorias: (string | null)[];
 }
+
+// HU-33: one line of a sheet. contado null = leave it as not counted
+export interface CountItemInput {
+  producto_id: number;
+  contado: number | null;
+}
+
+// HU-33 (owner only): the item with the system's stock right now and the money
+export interface CountCompareItem extends CountItem {
+  existencia: number;
+  precio_compra: number | null;
+  diferencia: number | null; // contado − existencia; null = not counted yet
+  dinero: number | null; // diferencia × precio_compra; null if not counted or no price
+}
+
+export interface CountCompareSummary {
+  productos: number;
+  contados: number;
+  pendientes: number;
+  con_diferencia: number;
+  faltante: number; // Q of what is missing (positive)
+  sobrante: number; // Q of what is extra
+  neto: number; // sobrante − faltante
+  sin_precio: number; // with a difference but no purchase price
+}
+
+export interface CountComparison extends Count {
+  items: CountCompareItem[];
+  categorias: (string | null)[];
+  resumen: CountCompareSummary;
+}

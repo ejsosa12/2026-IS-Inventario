@@ -4,11 +4,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
-import { CountDetail } from '../../models/count';
-import { Category } from '../../models/product';
+import { CountDetail, CountItem } from '../../models/count';
+import { Category, UnidadBase } from '../../models/product';
 
 // HU-32/33/34: physical count ("Conteo físico"). Only one open at a time.
 // Step 1 (HU-32): anyone picks categories, starts the count and prints the sheets.
+// Step 2 (HU-33): anyone types in what was written on each sheet ("Guardar hoja");
+// the owner compares it with the system on counts/compare/:id.
 // The owner can cancel a count started by mistake.
 @Component({
   imports: [RouterLink, DatePipe],
@@ -35,15 +37,27 @@ export class Counts {
 
   saving = signal(false);
 
-  // "3 de Clavos y tornillos · 4 de Herramientas"
-  perCategory = computed(() => {
-    const totals = new Map<string, number>();
+  readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+
+  // HU-33: the sheets of the open count (one per category) and the one being typed in
+  sheets = computed(() => {
+    const groups = new Map<string, CountItem[]>();
     for (const item of this.current()?.items ?? []) {
       const name = item.categoria ?? 'Sin categoría';
-      totals.set(name, (totals.get(name) ?? 0) + 1);
+      groups.set(name, [...(groups.get(name) ?? []), item]);
     }
-    return [...totals].map(([name, productos]) => ({ name, productos }));
+    return [...groups].map(([categoria, items]) => ({
+      categoria,
+      items,
+      contados: items.filter((i) => i.contado !== null).length,
+    }));
   });
+  sheetName = signal<string | null>(null);
+  activeSheet = computed(
+    () => this.sheets().find((s) => s.categoria === this.sheetName()) ?? this.sheets()[0] ?? null,
+  );
+  // What is typed and not saved yet, by producto_id. Kept when switching sheets
+  drafts = signal<Record<number, string>>({});
 
   constructor() {
     this.dataServices.getCategories().subscribe({
@@ -144,6 +158,7 @@ export class Counts {
       next: () => {
         this.saving.set(false);
         this.current.set(null);
+        this.drafts.set({});
         this.notice.set(`Conteo #${count.id} cancelado`);
       },
       error: (err: HttpErrorResponse) => {
@@ -154,6 +169,106 @@ export class Counts {
             : 'No se pudo cancelar el conteo',
         );
         this.load();
+      },
+    });
+  }
+
+  // ---------------- HU-33: type in what was counted ----------------
+
+  draft(item: CountItem): string {
+    return this.drafts()[item.producto_id] ?? (item.contado === null ? '' : String(item.contado));
+  }
+
+  setDraft(item: CountItem, value: string) {
+    this.drafts.update((d) => ({ ...d, [item.producto_id]: value }));
+  }
+
+  // '' = not counted (null). Accepts a comma as decimal point ("2,5"). NaN = not a number
+  private parse(text: string): number | null {
+    const clean = text.trim().replace(',', '.');
+    return clean === '' ? null : Number(clean);
+  }
+
+  // Same rules as Flask: 0 or more, at most 3 decimals, whole for unidad (HU-07)
+  problem(item: CountItem): string | null {
+    const value = this.parse(this.draft(item));
+    if (value === null) {
+      return null;
+    }
+    if (!Number.isFinite(value)) {
+      return 'Escriba un número';
+    }
+    if (value < 0) {
+      return 'No puede ser negativo';
+    }
+    if (item.unidad_base === 'unidad' && !Number.isInteger(value)) {
+      return 'Solo números enteros';
+    }
+    if (Math.abs(value * 1000 - Math.round(value * 1000)) > 1e-6) {
+      return 'Máximo 3 decimales';
+    }
+    return null;
+  }
+
+  // Typed and different from what is saved
+  private changed(item: CountItem): boolean {
+    return this.parse(this.draft(item)) !== item.contado;
+  }
+
+  dirty(items: CountItem[]): number {
+    return items.filter((i) => this.changed(i)).length;
+  }
+
+  hasProblems(items: CountItem[]): boolean {
+    return items.some((i) => this.problem(i) !== null);
+  }
+
+  pickSheet(name: string) {
+    this.sheetName.set(name);
+  }
+
+  saveSheet() {
+    const count = this.current();
+    const sheet = this.activeSheet();
+    if (!count || !sheet || this.saving() || this.hasProblems(sheet.items)) {
+      return;
+    }
+    const items = sheet.items
+      .filter((i) => this.changed(i))
+      .map((i) => ({ producto_id: i.producto_id, contado: this.parse(this.draft(i)) }));
+    if (!items.length) {
+      return;
+    }
+    this.error.set(null);
+    this.notice.set(null);
+    this.saving.set(true);
+    this.dataServices.saveCountItems(count.id, items).subscribe({
+      next: (detail) => {
+        this.saving.set(false);
+        this.current.set(detail);
+        // Saved: what is on screen is now what Flask has
+        this.drafts.update((d) => {
+          const next = { ...d };
+          for (const item of sheet.items) {
+            delete next[item.producto_id];
+          }
+          return next;
+        });
+        this.notice.set(
+          `Hoja "${sheet.categoria}" guardada (${items.length} ${items.length === 1 ? 'producto' : 'productos'})`,
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        if (err.status === 400 && err.error?.message === 'count is not open') {
+          this.error.set('Este conteo ya se cerró; lo anotado no se guardó');
+          this.drafts.set({});
+          this.load();
+        } else if (err.status === 0) {
+          this.error.set('No se pudo conectar con el servidor');
+        } else {
+          this.error.set('No se pudo guardar la hoja');
+        }
       },
     });
   }

@@ -1,6 +1,8 @@
+from decimal import Decimal, InvalidOperation
+
 from flask import Blueprint, g, request
 
-from app.access_data import AccessData, CountAlreadyOpen
+from app.access_data import AccessData, CountAlreadyOpen, CountNotOpen
 from app.security import requiere_rol
 
 # HU-32/33/34: physical count. Anyone starts one and prints the sheets; only the owner
@@ -23,6 +25,34 @@ def _count_to_json(count, items=None):
         # Names of the categories in the count, in the order of the sheets
         data["categorias"] = list(dict.fromkeys(item["categoria"] for item in items))
     return data
+
+
+# count_items.contado is decimal(10,3)
+CONTADO_MAX = Decimal("9999999.999")
+
+
+def _read_contado(value, unidad_base):
+    """HU-33: what was written on the sheet. Returns (Decimal or None, error or None).
+
+    None means "not counted yet" (the box was left blank). HU-07: whole for 'unidad'.
+    """
+    if value is None:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None, "contado must be a number"
+    try:
+        contado = Decimal(str(value).strip())
+    except InvalidOperation:
+        return None, "contado must be a number"
+    if not contado.is_finite() or contado < 0:
+        return None, "contado must be 0 or more"
+    if contado > CONTADO_MAX:
+        return None, "contado is too big"
+    if contado != contado.quantize(Decimal("0.001")):
+        return None, "contado allows at most 3 decimals"
+    if unidad_base == "unidad" and contado != contado.to_integral_value():
+        return None, "contado must be a whole number for products sold by unit"
+    return contado, None
 
 
 def _item_to_json(item):
@@ -103,3 +133,93 @@ def cancel_count(count_id):
         "message": "SUCCESS: count cancelled",
         "data": _count_to_json(access.get_count_by_id(count_id)),
     }, 200
+
+
+@counts.route('api/v1/count-items/<int:count_id>', methods=['PUT'])
+@requiere_rol()  # HU-33: anyone types in what was counted
+def save_count_items(count_id):
+    """Saves one sheet: {items: [{producto_id, contado}]}. contado null = not counted yet."""
+    access = AccessData()
+    count = access.get_count_by_id(count_id)
+    if count is None:
+        return _error("count does not exist", 404)
+    if count["estado"] != "abierto":
+        return _error("count is not open")
+
+    body = request.get_json(silent=True) or {}
+    items = body.get("items")
+    if not isinstance(items, list) or not items:
+        return _error("items must be a list with at least one product")
+
+    # The products of this count, to check each line and its unit
+    in_count = {item["producto_id"]: item for item in access.get_count_items(count_id)}
+    values = {}
+    for line in items:
+        producto_id = line.get("producto_id") if isinstance(line, dict) else None
+        if isinstance(producto_id, bool) or not isinstance(producto_id, int):
+            return _error("each item needs a producto_id")
+        if producto_id not in in_count:
+            return _error(f"product {producto_id} is not in this count")
+        if producto_id in values:
+            return _error(f"product {producto_id} is repeated")
+        contado, problem = _read_contado(line.get("contado"), in_count[producto_id]["unidad_base"])
+        if problem:
+            return _error(f"{in_count[producto_id]['codigo']}: {problem}")
+        values[producto_id] = contado
+
+    try:
+        changed = access.save_count_items(count_id, values, g.user["users"])
+    except CountNotOpen:
+        return _error("count is not open")
+
+    return {
+        "status": 0,
+        "message": f"SUCCESS: {changed} products saved",
+        "data": _count_to_json(access.get_count_by_id(count_id), access.get_count_items(count_id)),
+    }, 200
+
+
+def _compare_to_json(item):
+    """HU-33: sistema, contado, diferencia (contado − sistema) and dinero (diferencia × costo)."""
+    existencia = item["existencia"]
+    contado = item["contado"]
+    precio = item["precio_compra"]
+    diferencia = contado - existencia if contado is not None else None
+    dinero = diferencia * precio if diferencia is not None and precio is not None else None
+    return {
+        **_item_to_json(item),
+        "existencia": float(existencia),
+        "precio_compra": float(precio) if precio is not None else None,
+        "diferencia": float(diferencia) if diferencia is not None else None,
+        "dinero": round(float(dinero), 2) if dinero is not None else None,
+    }
+
+
+@counts.route('api/v1/counts/<int:count_id>/compare', methods=['GET'])
+@requiere_rol('admin')  # HU-33: only the owner sees the system's stock and the money
+def compare_count(count_id):
+    access = AccessData()
+    count = access.get_count_by_id(count_id)
+    if count is None:
+        return _error("count does not exist", 404)
+
+    items = [_compare_to_json(item) for item in access.get_count_compare(count_id)]
+    counted = [i for i in items if i["diferencia"] is not None]
+    different = [i for i in counted if i["diferencia"] != 0]
+    faltante = sum(-i["dinero"] for i in different if i["dinero"] is not None and i["dinero"] < 0)
+    sobrante = sum(i["dinero"] for i in different if i["dinero"] is not None and i["dinero"] > 0)
+    data = _count_to_json(count)
+    data["items"] = items
+    data["categorias"] = list(dict.fromkeys(i["categoria"] for i in items))
+    data["resumen"] = {
+        "productos": len(items),
+        "contados": len(counted),
+        "pendientes": len(items) - len(counted),
+        "con_diferencia": len(different),
+        "faltante": round(faltante, 2),
+        "sobrante": round(sobrante, 2),
+        "neto": round(sobrante - faltante, 2),
+        # With a difference but no purchase price: their money is unknown
+        "sin_precio": sum(1 for i in different if i["dinero"] is None),
+    }
+    return {"status": 0, "message": "SUCCESS: count compared", "data": data}, 200

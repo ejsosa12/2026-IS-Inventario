@@ -14,7 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
-import { Count, CountDetail } from '../../models/count';
+import { Count, CountComparison, CountDetail, CountItemInput } from '../../models/count';
 import { InventoryValue } from '../../models/report';
 import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
@@ -240,5 +240,19 @@ export class DataServices {
     return this.http
       .put<ApiResponse<Count>>(`${this.API_URL}/cancel-count/${id}`, {})
       .pipe(map((response) => response.data as Count));
+  }
+
+  // HU-33: saves one sheet. Anyone can; only while the count is open
+  saveCountItems(id: number, items: CountItemInput[]) {
+    return this.http
+      .put<ApiResponse<CountDetail>>(`${this.API_URL}/count-items/${id}`, { items })
+      .pipe(map((response) => response.data as CountDetail));
+  }
+
+  // HU-33 (owner only): system stock vs counted, with the money
+  getCountCompare(id: number) {
+    return this.http
+      .get<ApiResponse<CountComparison>>(`${this.API_URL}/counts/${id}/compare`)
+      .pipe(map((response) => response.data as CountComparison));
   }
 }
