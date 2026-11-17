@@ -175,6 +175,13 @@
                         @if (m.proveedor) { · {{ m.proveedor }} }
                       </p>
                     }
+                    @if (m.conteo_id) {
+                      <!-- HU-34: the adjustment came from this physical count -->
+                      <p>
+                        <a [routerLink]="['/content/counts/compare', m.conteo_id]"
+                           class="text-blue-700 hover:underline">Conteo #{{ m.conteo_id }}</a>
+                      </p>
+                    }
                     @if (m.motivo) {
                       <p class="text-gray-600 italic">"{{ m.motivo }}"</p>
                     }

@@ -14,7 +14,13 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
-import { Count, CountComparison, CountDetail, CountItemInput } from '../../models/count';
+import {
+  Count,
+  CountAdjustmentInput,
+  CountComparison,
+  CountDetail,
+  CountItemInput,
+} from '../../models/count';
 import { InventoryValue } from '../../models/report';
 import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
@@ -254,5 +260,20 @@ export class DataServices {
     return this.http
       .get<ApiResponse<CountComparison>>(`${this.API_URL}/counts/${id}/compare`)
       .pipe(map((response) => response.data as CountComparison));
+  }
+
+  // HU-34 (owner only): past counts, newest first
+  getCounts() {
+    return this.http
+      .get<ApiResponse<Count[]>>(`${this.API_URL}/counts`)
+      .pipe(map((response) => response.data as Count[]));
+  }
+
+  // HU-34 (owner only): applies the approved adjustments and closes the count.
+  // A 409 has data.productos (CountChangedProduct[]): review them again
+  applyCount(id: number, ajustes: CountAdjustmentInput[]) {
+    return this.http
+      .put<ApiResponse<Count>>(`${this.API_URL}/apply-count/${id}`, { ajustes })
+      .pipe(map((response) => response.data as Count));
   }
 }

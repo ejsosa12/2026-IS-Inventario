@@ -43,6 +43,19 @@ class CountNotOpen(Exception):
     """HU-33: the count was applied or cancelled (maybe a moment ago), it cannot change."""
 
 
+class CountChanged(Exception):
+    """HU-34: the difference the owner approved is not the one there is now (an invoice,
+    an output or a corrected sheet came in while they were reviewing).
+
+    productos: dicts with producto_id, codigo, nombre, unidad_base, existencia, contado,
+    diferencia (now) and aprobada (what the owner saw).
+    """
+
+    def __init__(self, productos):
+        super().__init__("the differences changed")
+        self.productos = productos
+
+
 class AccessData:
     """Acceso a la base de datos MySQL local.
 
@@ -942,7 +955,7 @@ class AccessData:
             SELECT k.id, k.tipo, k.cantidad, k.cambio, k.existencia, k.precio, k.motivo, k.fecha,
                    k.usuario_id, u.nombre AS usuario,
                    k.proveedor_id, s.nombre AS proveedor,
-                   k.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada,
+                   k.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, k.conteo_id,
                    pr.nombre AS presentacion, pr.factor
             FROM (
                 SELECT m.*,
@@ -1012,7 +1025,8 @@ class AccessData:
                c.cerrado_en, c.cerrado_por AS cerrado_por_id, uc.nombre AS cerrado_por,
                (SELECT COUNT(*) FROM count_items i WHERE i.conteo_id = c.id) AS productos,
                (SELECT COUNT(*) FROM count_items i WHERE i.conteo_id = c.id AND i.contado IS NOT NULL)
-                   AS contados
+                   AS contados,
+               (SELECT COUNT(*) FROM movements mv WHERE mv.conteo_id = c.id) AS ajustes
         FROM counts c
         JOIN users u ON u.users = c.creado_por
         LEFT JOIN users uc ON uc.users = c.cerrado_por
@@ -1162,3 +1176,92 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query, {"id": count_id})
                 return cursor.fetchall()
+
+    def get_counts(self, limit=50):
+        """HU-34: los últimos conteos (abiertos, aplicados y cancelados), el más reciente primero."""
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(self.COUNT_SELECT + "ORDER BY c.id DESC LIMIT %(limit)s", {"limit": limit})
+                return cursor.fetchall()
+
+    def get_count_adjustments(self, count_id):
+        """HU-34: the movements a count applied, by producto_id."""
+        query = """
+            SELECT m.producto_id, m.tipo, m.cantidad, m.precio, m.motivo
+            FROM movements m
+            WHERE m.conteo_id = %(id)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": count_id})
+                return {row["producto_id"]: row for row in cursor.fetchall()}
+
+    def apply_count(self, count_id, ajustes, usuario_id):
+        """HU-34: aplica los ajustes que el dueño aprobó y cierra el conteo como 'aplicado'.
+
+        ajustes: {producto_id: {"motivo": str, "diferencia": Decimal}} where diferencia is
+        what the owner saw (contado − existencia). Products left out keep the system's stock.
+        Inside one transaction: locks the count (CountNotOpen), then each product in id order
+        (_lock_stock), recomputes contado − existencia and raises CountChanged if any differs
+        from what was approved. Each adjustment is one ajuste_mas / ajuste_menos movement with
+        the purchase price of the moment, so afterwards the stock equals what was counted
+        (never negative, because contado >= 0). Returns how many movements were written.
+        """
+        insert = """
+            INSERT INTO movements (tipo, cantidad, precio, motivo, producto_id, usuario_id, conteo_id)
+            VALUES (%(tipo)s, %(cantidad)s, %(precio)s, %(motivo)s, %(producto_id)s,
+                    %(usuario_id)s, %(conteo_id)s)
+        """
+        item_query = """
+            SELECT i.contado, p.codigo, p.nombre, p.unidad_base
+            FROM count_items i JOIN products p ON p.id = i.producto_id
+            WHERE i.conteo_id = %(conteo_id)s AND i.producto_id = %(producto_id)s
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT estado FROM counts WHERE id = %(id)s FOR UPDATE",
+                                   {"id": count_id})
+                    row = cursor.fetchone()
+                    if row is None or row["estado"] != "abierto":
+                        raise CountNotOpen()
+
+                    changed, pending = [], []
+                    for producto_id in sorted(ajustes):
+                        existencia = self._lock_stock(cursor, producto_id)
+                        cursor.execute(item_query, {"conteo_id": count_id, "producto_id": producto_id})
+                        item = cursor.fetchone()
+                        aprobada = ajustes[producto_id]["diferencia"]
+                        diferencia = item["contado"] - existencia if item["contado"] is not None else None
+                        if diferencia != aprobada:
+                            changed.append({
+                                "producto_id": producto_id, "codigo": item["codigo"],
+                                "nombre": item["nombre"], "unidad_base": item["unidad_base"],
+                                "existencia": existencia, "contado": item["contado"],
+                                "diferencia": diferencia, "aprobada": aprobada,
+                            })
+                        elif diferencia != 0:
+                            pending.append((producto_id, diferencia))
+                    if changed:
+                        raise CountChanged(changed)
+
+                    for producto_id, diferencia in pending:
+                        cursor.execute(insert, {
+                            "tipo": "ajuste_mas" if diferencia > 0 else "ajuste_menos",
+                            "cantidad": abs(diferencia),
+                            "precio": self._last_purchase_price(cursor, producto_id),
+                            "motivo": ajustes[producto_id]["motivo"],
+                            "producto_id": producto_id, "usuario_id": usuario_id,
+                            "conteo_id": count_id,
+                        })
+                    cursor.execute("""
+                        UPDATE counts SET estado = 'aplicado', cerrado_por = %(usuario_id)s,
+                                          cerrado_en = NOW()
+                        WHERE id = %(id)s
+                    """, {"id": count_id, "usuario_id": usuario_id})
+                conn.commit()
+            except Exception:
+                # Also releases the locks
+                conn.rollback()
+                raise
+            return len(pending)

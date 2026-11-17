@@ -37,6 +37,8 @@ export class ProductHistory {
     dano: { label: 'Merma', classes: 'bg-red-100 text-red-800' },
     uso: { label: 'Uso interno', classes: 'bg-blue-100 text-blue-800' },
     anulacion: { label: 'Anulación', classes: 'bg-purple-100 text-purple-800' },
+    ajuste_mas: { label: 'Ajuste (+)', classes: 'bg-indigo-100 text-indigo-800' },
+    ajuste_menos: { label: 'Ajuste (−)', classes: 'bg-pink-100 text-pink-800' },
   };
   readonly shortcuts: { value: Shortcut; label: string }[] = [
     { value: '7', label: 'Últimos 7 días' },

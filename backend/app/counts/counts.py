@@ -2,7 +2,7 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, g, request
 
-from app.access_data import AccessData, CountAlreadyOpen, CountNotOpen
+from app.access_data import AccessData, CountAlreadyOpen, CountChanged, CountNotOpen
 from app.security import requiere_rol
 
 # HU-32/33/34: physical count. Anyone starts one and prints the sheets; only the owner
@@ -179,8 +179,23 @@ def save_count_items(count_id):
     }, 200
 
 
-def _compare_to_json(item):
-    """HU-33: sistema, contado, diferencia (contado − sistema) and dinero (diferencia × costo)."""
+def _adjustment_to_json(movement):
+    """HU-34: what the count applied to a product. cantidad is signed (+ sobraba, − faltaba)."""
+    if movement is None:
+        return None
+    cantidad = movement["cantidad"] if movement["tipo"] == "ajuste_mas" else -movement["cantidad"]
+    precio = movement["precio"]
+    return {
+        "tipo": movement["tipo"],
+        "cantidad": float(cantidad),
+        "motivo": movement["motivo"],
+        "dinero": round(float(cantidad * precio), 2) if precio is not None else None,
+    }
+
+
+def _compare_to_json(item, adjustment=None):
+    """HU-33: sistema, contado, diferencia (contado − sistema) and dinero (diferencia × costo).
+    HU-34: ajuste = what was applied (None if that product was not adjusted)."""
     existencia = item["existencia"]
     contado = item["contado"]
     precio = item["precio_compra"]
@@ -192,6 +207,7 @@ def _compare_to_json(item):
         "precio_compra": float(precio) if precio is not None else None,
         "diferencia": float(diferencia) if diferencia is not None else None,
         "dinero": round(float(dinero), 2) if dinero is not None else None,
+        "ajuste": _adjustment_to_json(adjustment),
     }
 
 
@@ -203,7 +219,9 @@ def compare_count(count_id):
     if count is None:
         return _error("count does not exist", 404)
 
-    items = [_compare_to_json(item) for item in access.get_count_compare(count_id)]
+    adjustments = access.get_count_adjustments(count_id)
+    items = [_compare_to_json(item, adjustments.get(item["producto_id"]))
+             for item in access.get_count_compare(count_id)]
     counted = [i for i in items if i["diferencia"] is not None]
     different = [i for i in counted if i["diferencia"] != 0]
     faltante = sum(-i["dinero"] for i in different if i["dinero"] is not None and i["dinero"] < 0)
@@ -223,3 +241,105 @@ def compare_count(count_id):
         "sin_precio": sum(1 for i in different if i["dinero"] is None),
     }
     return {"status": 0, "message": "SUCCESS: count compared", "data": data}, 200
+
+
+@counts.route('api/v1/counts', methods=['GET'])
+@requiere_rol('admin')  # HU-34: the owner reviews past counts
+def get_counts():
+    return {
+        "status": 0,
+        "message": "SUCCESS: counts",
+        "data": [_count_to_json(count) for count in AccessData().get_counts()],
+    }, 200
+
+
+# HU-34: why the shelf and the system did not match (decided 2026-11-16)
+ADJUSTMENT_REASONS = ("Pérdida", "Error de registro", "Producto dañado", "Producto encontrado", "Otro")
+DETALLE_MAX = 150
+
+
+def _read_adjustment(line, in_count):
+    """One approved adjustment. Returns (producto_id, {motivo, diferencia}, error)."""
+    producto_id = line.get("producto_id") if isinstance(line, dict) else None
+    if isinstance(producto_id, bool) or not isinstance(producto_id, int):
+        return None, None, "each adjustment needs a producto_id"
+    item = in_count.get(producto_id)
+    if item is None:
+        return None, None, f"product {producto_id} is not in this count"
+    if item["contado"] is None:
+        return None, None, f"{item['codigo']}: was not counted"
+
+    motivo = line.get("motivo")
+    if motivo not in ADJUSTMENT_REASONS:
+        return None, None, f"{item['codigo']}: motivo must be one of {', '.join(ADJUSTMENT_REASONS)}"
+    if motivo == "Otro":
+        detalle = line.get("detalle")
+        detalle = " ".join(detalle.split()) if isinstance(detalle, str) else ""
+        if not detalle:
+            return None, None, f"{item['codigo']}: motivo 'Otro' needs a detalle"
+        if len(detalle) > DETALLE_MAX:
+            return None, None, f"{item['codigo']}: detalle allows at most {DETALLE_MAX} characters"
+        motivo = f"Otro: {detalle}"
+
+    value = line.get("diferencia")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, None, f"{item['codigo']}: diferencia must be a number"
+    diferencia = Decimal(str(value))
+    if not diferencia.is_finite() or diferencia == 0:
+        return None, None, f"{item['codigo']}: diferencia must not be 0"
+    return producto_id, {"motivo": motivo, "diferencia": diferencia}, None
+
+
+@counts.route('api/v1/apply-count/<int:count_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-34: only the owner authorizes the adjustments
+def apply_count(count_id):
+    """{ajustes: [{producto_id, motivo, detalle, diferencia}]}. Closes the count as 'aplicado'.
+
+    Only the listed products are adjusted (partial apply); an empty list closes the count
+    without adjustments (everything matched). diferencia is what the owner saw: if it is not
+    the one there is now, nothing is applied and the answer is 409 with data.productos.
+    """
+    access = AccessData()
+    count = access.get_count_by_id(count_id)
+    if count is None:
+        return _error("count does not exist", 404)
+    if count["estado"] != "abierto":
+        return _error("count is not open")
+
+    body = request.get_json(silent=True) or {}
+    lines = body.get("ajustes")
+    if not isinstance(lines, list):
+        return _error("ajustes must be a list")
+
+    in_count = {item["producto_id"]: item for item in access.get_count_items(count_id)}
+    ajustes = {}
+    for line in lines:
+        producto_id, ajuste, problem = _read_adjustment(line, in_count)
+        if problem:
+            return _error(problem)
+        if producto_id in ajustes:
+            return _error(f"product {producto_id} is repeated")
+        ajustes[producto_id] = ajuste
+
+    try:
+        applied = access.apply_count(count_id, ajustes, g.user["users"])
+    except CountNotOpen:
+        return _error("count is not open")
+    except CountChanged as error:
+        return {
+            "status": 1,
+            "message": "the differences changed, review them again",
+            "data": {"productos": [{
+                **p,
+                "existencia": float(p["existencia"]),
+                "contado": float(p["contado"]) if p["contado"] is not None else None,
+                "diferencia": float(p["diferencia"]) if p["diferencia"] is not None else None,
+                "aprobada": float(p["aprobada"]),
+            } for p in error.productos]},
+        }, 409
+
+    return {
+        "status": 0,
+        "message": f"SUCCESS: count applied with {applied} adjustments",
+        "data": _count_to_json(access.get_count_by_id(count_id)),
+    }, 200

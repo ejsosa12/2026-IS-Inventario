@@ -454,12 +454,14 @@ def _history_row_to_json(row):
         "usuario": row["usuario"],
         "motivo": row["motivo"],
         "precio": float(precio) if precio is not None else None,
-        # What it was worth: paid for an entrada, purchase price for dano/uso
+        # What it was worth: paid for an entrada, purchase price for dano/uso/ajustes
         "costo": float((row["cantidad"] * precio).quantize(TWO_DECIMALS)) if precio is not None else None,
         "proveedor_id": row["proveedor_id"],
         "proveedor": row["proveedor"],
         "entrada_id": row["entrada_id"],
         "numero_factura": row["numero_factura"],
+        # HU-34: the physical count that made an ajuste_mas / ajuste_menos
+        "conteo_id": row["conteo_id"],
         # Only an entrada can be voided; its 'anulacion' row is the one that takes the stock back
         "anulada": row["tipo"] == "entrada" and bool(row["anulada"]),
         # HU-06: "2 caja" as it came on the invoice

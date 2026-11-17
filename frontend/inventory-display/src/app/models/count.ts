@@ -14,6 +14,7 @@ export interface Count {
   cerrado_por: string | null;
   productos: number;
   contados: number; // HU-33: how many already have what was counted
+  ajustes: number; // HU-34: how many adjustments it applied
 }
 
 // One product of the count. HU-32: no system stock here, so the count is honest
@@ -49,6 +50,15 @@ export interface CountCompareItem extends CountItem {
   precio_compra: number | null;
   diferencia: number | null; // contado − existencia; null = not counted yet
   dinero: number | null; // diferencia × precio_compra; null if not counted or no price
+  ajuste: CountApplied | null; // HU-34: what was applied; null = not adjusted
+}
+
+// HU-34: one adjustment a count applied. cantidad signed (+ sobraba, − faltaba)
+export interface CountApplied {
+  tipo: 'ajuste_mas' | 'ajuste_menos';
+  cantidad: number;
+  motivo: string;
+  dinero: number | null;
 }
 
 export interface CountCompareSummary {
@@ -66,4 +76,34 @@ export interface CountComparison extends Count {
   items: CountCompareItem[];
   categorias: (string | null)[];
   resumen: CountCompareSummary;
+}
+
+// HU-34: why the shelf and the system did not match. "Otro" needs a detalle
+export const ADJUSTMENT_REASONS = [
+  'Pérdida',
+  'Error de registro',
+  'Producto dañado',
+  'Producto encontrado',
+  'Otro',
+] as const;
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[number];
+
+// What the owner approves. diferencia is what they saw, so Flask can tell if it changed
+export interface CountAdjustmentInput {
+  producto_id: number;
+  motivo: AdjustmentReason;
+  detalle?: string;
+  diferencia: number;
+}
+
+// 409 from apply-count: the difference is not the one the owner approved anymore
+export interface CountChangedProduct {
+  producto_id: number;
+  codigo: string;
+  nombre: string;
+  unidad_base: UnidadBase;
+  existencia: number;
+  contado: number | null;
+  diferencia: number | null;
+  aprobada: number;
 }

@@ -4,13 +4,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
-import { CountDetail, CountItem } from '../../models/count';
+import { Count, CountDetail, CountItem } from '../../models/count';
 import { Category, UnidadBase } from '../../models/product';
 
 // HU-32/33/34: physical count ("Conteo físico"). Only one open at a time.
 // Step 1 (HU-32): anyone picks categories, starts the count and prints the sheets.
 // Step 2 (HU-33): anyone types in what was written on each sheet ("Guardar hoja");
 // the owner compares it with the system on counts/compare/:id.
+// Step 3 (HU-34): the owner applies the adjustments there; here they see the past counts.
 // The owner can cancel a count started by mistake.
 @Component({
   imports: [RouterLink, DatePipe],
@@ -36,6 +37,10 @@ export class Counts {
   );
 
   saving = signal(false);
+
+  // HU-34 (owner only): past counts, newest first. The open one is shown above
+  history = signal<Count[]>([]);
+  pastCounts = computed(() => this.history().filter((c) => c.estado !== 'abierto'));
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
 
@@ -68,6 +73,11 @@ export class Counts {
 
   private load() {
     this.loading.set(true);
+    if (this.isAdmin()) {
+      this.dataServices.getCounts().subscribe({
+        next: (counts) => this.history.set(counts),
+      });
+    }
     this.dataServices.getCurrentCount().subscribe({
       next: (count) => {
         if (!count) {
@@ -160,6 +170,7 @@ export class Counts {
         this.current.set(null);
         this.drafts.set({});
         this.notice.set(`Conteo #${count.id} cancelado`);
+        this.load();
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);

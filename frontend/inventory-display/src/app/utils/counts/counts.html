@@ -214,5 +214,55 @@
         </div>
       </div>
     }
+
+    <!-- HU-34 (owner only): past counts, to see what each one adjusted -->
+    @if (isAdmin() && pastCounts().length) {
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Conteos anteriores</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conteo</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Iniciado</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cerrado</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productos</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ajustes</th>
+                <th class="px-6 py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              @for (past of pastCounts(); track past.id) {
+                <tr>
+                  <td class="px-6 py-3 font-medium text-gray-900">#{{ past.id }}</td>
+                  <td class="px-6 py-3 text-gray-700">
+                    {{ past.creado_en | date: 'dd/MM/yyyy HH:mm' }}
+                    <div class="text-xs text-gray-500">{{ past.creado_por }}</div>
+                  </td>
+                  <td class="px-6 py-3">
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                          [class]="past.estado === 'aplicado' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'">
+                      {{ past.estado === 'aplicado' ? 'Aplicado' : 'Cancelado' }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-3 text-gray-700">
+                    {{ past.cerrado_en | date: 'dd/MM/yyyy HH:mm' }}
+                    <div class="text-xs text-gray-500">{{ past.cerrado_por }}</div>
+                  </td>
+                  <td class="px-6 py-3 text-gray-700">{{ past.contados }} de {{ past.productos }}</td>
+                  <td class="px-6 py-3 text-gray-700">{{ past.ajustes }}</td>
+                  <td class="px-6 py-3 text-right">
+                    <a [routerLink]="['/content/counts/compare', past.id]" class="text-blue-700 hover:underline">Ver</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
   </main>
 </div>
