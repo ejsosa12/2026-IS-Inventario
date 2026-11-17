@@ -123,6 +123,111 @@ def _validate_presentations(raw, unidad_base):
     return presentations, None
 
 
+# decimal(10,3) / decimal(10,2) / decimal(12,4) limits
+QUANTITY_MAX = Decimal("10000000")
+PRICE_MAX = Decimal("100000000")
+
+
+def _optional_number(value):
+    """'' and None are "empty". Returns (Decimal or None, True if it was given but is not a number)."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None, False
+    if isinstance(value, str):
+        # Accept "2,5" as well (people type it like that)
+        value = value.strip().replace(",", ".")
+    number = _to_decimal(value)
+    return number, number is None
+
+
+def read_new_product(raw):
+    """HU-01 (+ HU-07, HU-21, HU-02 and HU-31): checks the fields of a new product.
+
+    raw: dict with codigo, nombre, unidad_base, precio, stock_minimo and the optional
+    precio_compra and existencia (initial stock, HU-31). Values may be numbers or strings.
+    Returns (fields, errors): fields with clean values, errors a list of Spanish messages
+    (shared by add-product and the Excel load, which shows them to the owner row by row).
+    The category and the presentations are checked by each caller.
+    """
+    errors = []
+    codigo = str(raw.get("codigo") or "").strip()
+    nombre = str(raw.get("nombre") or "").strip()
+    unidad_base = raw.get("unidad_base")
+
+    if not codigo:
+        errors.append("El código es obligatorio")
+    elif len(codigo) > 30:
+        errors.append("El código puede tener máximo 30 caracteres")
+    if not nombre:
+        errors.append("El nombre es obligatorio")
+    elif len(nombre) > 100:
+        errors.append("El nombre puede tener máximo 100 caracteres")
+    if unidad_base not in UNIDADES_BASE:
+        errors.append(f"La unidad debe ser una de: {', '.join(UNIDADES_BASE)}")
+        unidad_base = None
+
+    # Sale price per base unit, required, decimal(10,2)
+    precio, bad = _optional_number(raw.get("precio"))
+    if precio is None:
+        errors.append("El precio de venta debe ser un número" if bad else "El precio de venta es obligatorio")
+    elif precio < 0:
+        errors.append("El precio de venta no puede ser negativo")
+    elif not _decimals_ok(precio, 2) or precio >= PRICE_MAX:
+        errors.append("El precio de venta puede tener máximo 2 decimales")
+
+    # HU-02: purchase price per base unit, optional, decimal(12,4)
+    precio_compra, bad = _optional_number(raw.get("precio_compra"))
+    if bad:
+        errors.append("El precio de compra debe ser un número")
+    elif precio_compra is not None:
+        if precio_compra < 0:
+            errors.append("El precio de compra no puede ser negativo")
+        elif not _decimals_ok(precio_compra, 4) or precio_compra >= PRICE_MAX:
+            errors.append("El precio de compra puede tener máximo 4 decimales")
+
+    # HU-21: optional. Empty = the product does not generate alerts
+    stock_minimo, bad = _optional_number(raw.get("stock_minimo"))
+    if bad:
+        errors.append("El mínimo debe ser un número")
+    elif stock_minimo is not None:
+        if stock_minimo < 0:
+            errors.append("El mínimo no puede ser negativo")
+        elif not _decimals_ok(stock_minimo, 3) or stock_minimo >= QUANTITY_MAX:
+            errors.append("El mínimo puede tener máximo 3 decimales")
+        elif unidad_base == "unidad" and stock_minimo != stock_minimo.to_integral_value():
+            errors.append("En productos por unidad el mínimo debe ser entero")
+
+    existencia, problems = read_initial_stock(raw.get("existencia"), unidad_base, precio_compra)
+    errors += problems
+
+    fields = {
+        "codigo": codigo, "nombre": nombre, "unidad_base": unidad_base, "precio": precio,
+        "precio_compra": precio_compra, "stock_minimo": stock_minimo, "existencia": existencia,
+    }
+    return fields, errors
+
+
+def read_initial_stock(value, unidad_base, precio_compra):
+    """HU-31: the stock a product starts with. Empty = 0.
+
+    With stock, the purchase price is required so HU-26 knows what it is worth.
+    Returns (Decimal, errors).
+    """
+    existencia, bad = _optional_number(value)
+    if bad:
+        return None, ["La existencia debe ser un número"]
+    existencia = existencia or Decimal(0)
+    if existencia < 0:
+        return None, ["La existencia no puede ser negativa"]
+    if not _decimals_ok(existencia, 3) or existencia >= QUANTITY_MAX:
+        return None, ["La existencia puede tener máximo 3 decimales"]
+    # HU-07: products sold by unit only accept whole numbers
+    if unidad_base == "unidad" and existencia != existencia.to_integral_value():
+        return None, ["En productos por unidad la existencia debe ser entera"]
+    if existencia > 0 and precio_compra is None:
+        return None, ["Con existencia, el precio de compra es obligatorio (para saber cuánto vale)"]
+    return existencia, []
+
+
 @catalog.route('api/v1/add-product', methods=['POST'])
 @requiere_rol('admin')  # HU-29: only the owner manages the catalog
 def add_product():
@@ -131,43 +236,12 @@ def add_product():
     if not body:
         return _error("product data is required")
 
-    codigo = str(body.get("codigo") or "").strip()
-    nombre = str(body.get("nombre") or "").strip()
-    unidad_base = body.get("unidad_base", "unidad")
-    precio = _to_decimal(body.get("precio"))
-    stock_minimo_raw = body.get("stock_minimo")
+    fields, errors = read_new_product({**body, "unidad_base": body.get("unidad_base", "unidad")})
+    if errors:
+        return _error(errors[0])
+    codigo = fields["codigo"]
+    unidad_base = fields["unidad_base"]
     categoria_id = body.get("categoria_id")
-
-    # Required fields
-    if not codigo:
-        return _error("codigo is required")
-    if len(codigo) > 30:
-        return _error("codigo must have at most 30 characters")
-
-    if not nombre:
-        return _error("nombre is required")
-    if len(nombre) > 100:
-        return _error("nombre must have at most 100 characters")
-
-    if precio is None:
-        return _error("precio is required and must be a number")
-    if precio < 0:
-        return _error("precio cannot be negative")
-
-    if unidad_base not in UNIDADES_BASE:
-        return _error(f"unidad_base must be one of: {', '.join(UNIDADES_BASE)}")
-
-    # HU-21: stock_minimo is optional. Empty = the product does not generate alerts
-    stock_minimo = None
-    if stock_minimo_raw not in (None, ""):
-        stock_minimo = _to_decimal(stock_minimo_raw)
-        if stock_minimo is None:
-            return _error("stock_minimo must be a number")
-        if stock_minimo < 0:
-            return _error("stock_minimo cannot be negative")
-        # HU-07: products sold by unit only accept whole numbers
-        if unidad_base == 'unidad' and stock_minimo != stock_minimo.to_integral_value():
-            return _error("stock_minimo must be a whole number for products sold by unidad")
 
     # HU-06: optional, how the product is bought ("1 caja = 50 lb")
     presentaciones, error = _validate_presentations(body.get("presentaciones"), unidad_base)
@@ -186,7 +260,11 @@ def add_product():
 
     try:
         new_id = access.add_product(
-            codigo, nombre, precio, unidad_base, stock_minimo, categoria_id, presentaciones
+            codigo, fields["nombre"], fields["precio"], unidad_base, fields["stock_minimo"],
+            categoria_id, presentaciones,
+            # HU-31 by hand: purchase price and initial stock (an 'inicial' movement)
+            precio_compra=fields["precio_compra"], existencia=fields["existencia"],
+            usuario_id=g.user["users"],
         )
     except pymysql.err.IntegrityError:
         # Two requests with the same codigo at the same time: the UNIQUE in the table stops the second one

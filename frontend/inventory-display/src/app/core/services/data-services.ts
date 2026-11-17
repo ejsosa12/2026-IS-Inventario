@@ -14,6 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
+import { InitialLoadResult } from '../../models/initial-load';
 import {
   Count,
   CountAdjustmentInput,
@@ -275,5 +276,30 @@ export class DataServices {
     return this.http
       .put<ApiResponse<Count>>(`${this.API_URL}/apply-count/${id}`, { ajustes })
       .pipe(map((response) => response.data as Count));
+  }
+
+  // HU-31 (owner only): the Excel template, as a file to save
+  getInitialLoadTemplate() {
+    return this.http.get(`${this.API_URL}/initial-load/template`, { responseType: 'blob' });
+  }
+
+  // HU-31: checks the file and returns every row with its errors. Saves nothing
+  previewInitialLoad(file: File) {
+    return this.http
+      .post<ApiResponse<InitialLoadResult>>(`${this.API_URL}/initial-load/preview`, this.excelForm(file))
+      .pipe(map((response) => response.data as InitialLoadResult));
+  }
+
+  // HU-31: checks it again and saves all or nothing. 400 with data = the file has errors
+  saveInitialLoad(file: File) {
+    return this.http
+      .post<ApiResponse<InitialLoadResult>>(`${this.API_URL}/initial-load`, this.excelForm(file))
+      .pipe(map((response) => response.data as InitialLoadResult));
+  }
+
+  private excelForm(file: File) {
+    const form = new FormData();
+    form.append('archivo', file, file.name);
+    return form;
   }
 }

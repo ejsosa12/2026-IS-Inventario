@@ -49,6 +49,9 @@ export class AddProduct {
     precio: [null as number | null, [Validators.required, Validators.min(0)]],
     unidad_base: ['unidad' as UnidadBase, Validators.required],
     stock_minimo: [null as number | null, Validators.min(0)],
+    // HU-31: optional initial stock and purchase price (per base unit)
+    existencia: [null as number | null, Validators.min(0)],
+    precio_compra: [null as number | null, Validators.min(0)],
     // HU-05: every product belongs to a category
     categoria_id: [null as number | null, Validators.required],
     presentaciones: this.fb.array<ReturnType<AddProduct['presentationGroup']>>([]),
@@ -120,6 +123,20 @@ export class AddProduct {
       return;
     }
 
+    // HU-31: same rules Flask checks
+    if (
+      value.unidad_base === 'unidad' &&
+      value.existencia != null &&
+      !Number.isInteger(value.existencia)
+    ) {
+      this.error.set('Para productos por unidad la existencia debe ser un número entero');
+      return;
+    }
+    if ((value.existencia ?? 0) > 0 && value.precio_compra == null) {
+      this.error.set('Si tiene existencia, escriba el precio de compra (para saber cuánto vale)');
+      return;
+    }
+
     // HU-06: same rules Flask checks, but here the user sees them right away
     const presentaciones: NewPresentation[] = value.presentaciones.map((p) => ({
       nombre: p.nombre!.trim(),
@@ -145,6 +162,8 @@ export class AddProduct {
       stock_minimo: value.stock_minimo ?? null,
       categoria_id: value.categoria_id!,
       presentaciones,
+      existencia: value.existencia ?? null,
+      precio_compra: value.precio_compra ?? null,
     };
 
     this.saving.set(true);

@@ -39,6 +39,7 @@ export class ProductHistory {
     anulacion: { label: 'Anulación', classes: 'bg-purple-100 text-purple-800' },
     ajuste_mas: { label: 'Ajuste (+)', classes: 'bg-indigo-100 text-indigo-800' },
     ajuste_menos: { label: 'Ajuste (−)', classes: 'bg-pink-100 text-pink-800' },
+    inicial: { label: 'Inventario inicial', classes: 'bg-gray-100 text-gray-800' },
   };
   readonly shortcuts: { value: Shortcut; label: string }[] = [
     { value: '7', label: 'Últimos 7 días' },

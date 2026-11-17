@@ -1,0 +1,178 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4">
+      <a routerLink="/content/products" class="text-sm text-blue-800 hover:underline">
+        <i class="fas fa-arrow-left mr-1"></i> Productos
+      </a>
+      <h1 class="text-2xl font-semibold text-gray-900 mt-1">Cargar inventario inicial</h1>
+      <p class="text-gray-600 text-sm mt-1">Meta de una vez todo lo que ya hay en la ferretería, desde un Excel</p>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    @if (error()) {
+      <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</div>
+    }
+
+    @if (saved() && result(); as r) {
+      <div class="px-4 py-3 rounded-lg bg-green-100 text-green-800 text-sm font-medium flex flex-wrap items-center justify-between gap-4">
+        <span>
+          Listo: {{ r.resumen.nuevos }} {{ r.resumen.nuevos === 1 ? 'producto creado' : 'productos creados' }}
+          @if (r.resumen.existentes) {
+            y {{ r.resumen.existentes }} con existencia cargada
+          }
+          · Q{{ r.resumen.valor | number: '1.2-2' }} en inventario inicial
+        </span>
+        <span class="flex gap-4">
+          <a routerLink="/content/products" class="underline">Ver productos</a>
+          <button type="button" (click)="reset()" class="underline">Cargar otro archivo</button>
+        </span>
+      </div>
+    }
+
+    <!-- Steps -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-blue-800">Paso 1</p>
+        <h3 class="text-lg font-semibold text-gray-900">Descargue la plantilla</h3>
+        <p class="text-sm text-gray-600 mt-1 mb-4">
+          Llene una fila por producto. La hoja "Instrucciones" explica cada columna; la categoría y la unidad se eligen de una lista.
+        </p>
+        <button type="button" (click)="downloadTemplate()" [disabled]="downloading()"
+                class="px-4 py-2 bg-white text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50">
+          <i class="fas fa-download mr-1"></i>
+          {{ downloading() ? 'Descargando...' : 'Descargar plantilla' }}
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <p class="text-sm font-semibold text-blue-800">Paso 2</p>
+        <h3 class="text-lg font-semibold text-gray-900">Suba el archivo lleno</h3>
+        <p class="text-sm text-gray-600 mt-1 mb-4">
+          Se revisa antes de guardar. Si una fila tiene error no se guarda nada: corríjalo en Excel y súbalo otra vez.
+        </p>
+        <label class="inline-flex items-center px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors cursor-pointer"
+               [class.opacity-50]="checking() || saving()">
+          <i class="fas fa-file-upload mr-2"></i>
+          {{ checking() ? 'Revisando...' : file() ? 'Subir otro archivo' : 'Elegir archivo .xlsx' }}
+          <input type="file" accept=".xlsx" class="hidden" (change)="pick($event)" [disabled]="checking() || saving()">
+        </label>
+        @if (file(); as f) {
+          <p class="mt-2 text-sm text-gray-700">
+            <i class="fas fa-file-excel text-green-700 mr-1"></i> {{ f.name }}
+            @if (!checking() && !saved()) {
+              · <button type="button" (click)="check()" class="text-blue-700 hover:underline">Revisar de nuevo</button>
+            }
+          </p>
+        }
+      </div>
+    </div>
+
+    @if (result(); as r) {
+      <!-- Summary -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Productos nuevos</p>
+          <p class="text-2xl font-semibold text-gray-900">{{ r.resumen.nuevos }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Ya existían (solo existencia)</p>
+          <p class="text-2xl font-semibold text-gray-900">{{ r.resumen.existentes }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Filas con error</p>
+          <p class="text-2xl font-semibold" [class]="r.resumen.con_error ? 'text-red-700' : 'text-green-700'">{{ r.resumen.con_error }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <p class="text-sm text-gray-500">Valor del inventario</p>
+          <p class="text-2xl font-semibold text-gray-900">Q{{ r.resumen.valor | number: '1.2-2' }}</p>
+        </div>
+      </div>
+
+      <!-- Rows -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Paso 3 · Revise y guarde</h3>
+            <p class="text-sm text-gray-600">{{ r.resumen.filas }} {{ r.resumen.filas === 1 ? 'fila' : 'filas' }} en el archivo</p>
+          </div>
+          @if (r.resumen.con_error) {
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" [checked]="onlyErrors()" (change)="onlyErrors.set(!onlyErrors())" class="w-4 h-4">
+              Solo filas con error
+            </label>
+          }
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                @for (title of ['Fila', 'Código', 'Producto', 'Categoría', 'P. venta', 'P. compra', 'Mínimo', 'Existencia', '']; track $index) {
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ title }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              @for (row of rows(); track row.fila) {
+                <tr [class.bg-red-50]="row.errores.length">
+                  <td class="px-4 py-3 text-gray-500">{{ row.fila }}</td>
+                  <td class="px-4 py-3 text-gray-900 whitespace-nowrap">{{ row.codigo || '—' }}</td>
+                  <td class="px-4 py-3 text-gray-900">
+                    {{ row.nombre || '—' }}
+                    @for (problem of row.errores; track $index) {
+                      <p class="text-xs text-red-700"><i class="fas fa-exclamation-circle mr-1"></i>{{ problem }}</p>
+                    }
+                  </td>
+                  <td class="px-4 py-3 text-gray-700">{{ row.categoria || '—' }}</td>
+                  <td class="px-4 py-3 text-gray-700 whitespace-nowrap">
+                    @if (row.precio !== null) { Q{{ row.precio | number: '1.2-2' }} } @else { — }
+                  </td>
+                  <td class="px-4 py-3 text-gray-700 whitespace-nowrap">
+                    @if (row.precio_compra !== null) { Q{{ row.precio_compra | number: '1.2-4' }} } @else { — }
+                  </td>
+                  <td class="px-4 py-3 text-gray-700">{{ row.stock_minimo ?? '—' }}</td>
+                  <td class="px-4 py-3 text-gray-900 whitespace-nowrap">{{ quantity(row) }}</td>
+                  <td class="px-4 py-3">
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                          [class]="row.accion === 'nuevo' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'">
+                      {{ row.accion === 'nuevo' ? 'Nuevo' : 'Ya existe' }}
+                    </span>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="9" class="px-6 py-6 text-center text-gray-500">No hay filas con error</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (!saved()) {
+          <div class="px-6 py-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+            <p class="text-sm" [class]="r.resumen.con_error ? 'text-red-700' : 'text-gray-600'">
+              @if (r.resumen.con_error) {
+                Corrija {{ r.resumen.con_error }} {{ r.resumen.con_error === 1 ? 'fila' : 'filas' }} en Excel y suba el archivo otra vez.
+              } @else {
+                Todo está bien. "Ya existe" solo carga la existencia y el precio de compra; el resto de esa fila no se cambia.
+              }
+            </p>
+            <button type="button" (click)="save()" [disabled]="!canSave() || saving()"
+                    class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <i class="fas fa-save mr-1"></i>
+              {{ saving() ? 'Guardando...' : 'Guardar' }}
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </main>
+</div>

@@ -6,10 +6,12 @@ from contextlib import contextmanager
 import pymysql
 from pymysql.cursors import DictCursor
 
-# How one movement changes the stock (in SQL, on a `movements m` row): entrada and
-# ajuste_mas (HU-34) add; venta, dano, uso, anulacion and ajuste_menos subtract.
+# How one movement changes the stock (in SQL, on a `movements m` row): entrada,
+# ajuste_mas (HU-34) and inicial (HU-31) add; venta, dano, uso, anulacion and
+# ajuste_menos subtract.
 # Every stock query uses this, so a new movement type is added in one place.
-STOCK_CHANGE = "CASE WHEN m.tipo IN ('entrada', 'ajuste_mas') THEN m.cantidad ELSE -m.cantidad END"
+STOCK_CHANGE = ("CASE WHEN m.tipo IN ('entrada', 'ajuste_mas', 'inicial') "
+                "THEN m.cantidad ELSE -m.cantidad END")
 
 
 class InsufficientStock(Exception):
@@ -41,6 +43,17 @@ class CountAlreadyOpen(Exception):
 
 class CountNotOpen(Exception):
     """HU-33: the count was applied or cancelled (maybe a moment ago), it cannot change."""
+
+
+class ProductHasMovements(Exception):
+    """HU-31: initial stock only goes to products without movements (it is the starting point).
+
+    codigos: the products that got movements since the file was checked.
+    """
+
+    def __init__(self, codigos):
+        super().__init__("products already have movements")
+        self.codigos = codigos
 
 
 class CountChanged(Exception):
@@ -317,18 +330,32 @@ class AccessData:
                 cursor.execute(query, {"id": product_id})
                 return cursor.fetchone()
 
+    PRODUCT_INSERT = """
+        INSERT INTO products (codigo, nombre, precio, precio_compra, unidad_base, stock_minimo,
+                              activo, categoria_id)
+        VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(precio_compra)s, %(unidad_base)s,
+                %(stock_minimo)s, true, %(categoria_id)s)
+    """
+
+    @staticmethod
+    def _insert_initial_stock(cursor, producto_id, existencia, precio_compra, usuario_id, motivo=None):
+        """HU-31: the stock a product starts with, as one 'inicial' movement (it adds)."""
+        cursor.execute("""
+            INSERT INTO movements (tipo, cantidad, precio, motivo, producto_id, usuario_id)
+            VALUES ('inicial', %(cantidad)s, %(precio)s, %(motivo)s, %(producto_id)s, %(usuario_id)s)
+        """, {"cantidad": existencia, "precio": precio_compra, "motivo": motivo,
+              "producto_id": producto_id, "usuario_id": usuario_id})
+
     def add_product(self, codigo, nombre, precio, unidad_base, stock_minimo=None, categoria_id=None,
-                    presentaciones=None):
+                    presentaciones=None, precio_compra=None, existencia=0, usuario_id=None):
         """Inserta un producto nuevo (siempre activo) con sus presentaciones y devuelve su id.
 
-        presentaciones: list of {"nombre", "factor"} (HU-06). Product and presentations are
-        saved together: if one fails, nothing is saved.
+        presentaciones: list of {"nombre", "factor"} (HU-06). HU-31 by hand: precio_compra and
+        existencia (initial stock, saved as an 'inicial' movement by usuario_id).
+        Everything is saved together: if one fails, nothing is saved.
         Lanza pymysql.err.IntegrityError si el código ya existe.
         """
-        product_query = """
-            INSERT INTO products (codigo, nombre, precio, unidad_base, stock_minimo, activo, categoria_id)
-            VALUES (%(codigo)s, %(nombre)s, %(precio)s, %(unidad_base)s, %(stock_minimo)s, true, %(categoria_id)s)
-        """
+        product_query = self.PRODUCT_INSERT
         presentation_query = """
             INSERT INTO presentations (producto_id, nombre, factor)
             VALUES (%(producto_id)s, %(nombre)s, %(factor)s)
@@ -337,6 +364,7 @@ class AccessData:
             "codigo": codigo,
             "nombre": nombre,
             "precio": precio,
+            "precio_compra": precio_compra,
             "unidad_base": unidad_base,
             "stock_minimo": stock_minimo,
             "categoria_id": categoria_id,
@@ -348,6 +376,8 @@ class AccessData:
                     new_id = cursor.lastrowid
                     for presentation in presentaciones or []:
                         cursor.execute(presentation_query, {**presentation, "producto_id": new_id})
+                    if existencia:
+                        self._insert_initial_stock(cursor, new_id, existencia, precio_compra, usuario_id)
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -1265,3 +1295,66 @@ class AccessData:
                 conn.rollback()
                 raise
             return len(pending)
+
+    # ------------------------------------------------------------
+    # HU-31: load what the store already has (from Excel)
+    # ------------------------------------------------------------
+
+    def get_products_for_initial_load(self):
+        """Every product with its purchase price and whether it already has movements."""
+        query = """
+            SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.precio_compra, p.activo,
+                   c.nombre AS categoria,
+                   EXISTS (SELECT 1 FROM movements m WHERE m.producto_id = p.id) AS tiene_movimientos
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.categoria_id
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
+    def initial_load(self, nuevos, existentes, usuario_id, motivo):
+        """Saves a checked Excel file in one transaction: all or nothing (HU-31).
+
+        nuevos: dicts with the fields of add_product (codigo, nombre, precio, precio_compra,
+        unidad_base, stock_minimo, categoria_id, existencia).
+        existentes: dicts with producto_id, codigo, existencia and precio_compra (None = keep).
+        Raises ProductHasMovements if an existing product got a movement since it was checked
+        (it is locked first), and pymysql IntegrityError if a new codigo was taken meanwhile.
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    taken = []
+                    for row in sorted(existentes, key=lambda r: r["producto_id"]):
+                        cursor.execute("SELECT id FROM products WHERE id = %(id)s FOR UPDATE",
+                                       {"id": row["producto_id"]})
+                        cursor.execute("SELECT 1 FROM movements WHERE producto_id = %(id)s LIMIT 1",
+                                       {"id": row["producto_id"]})
+                        if cursor.fetchone():
+                            taken.append(row["codigo"])
+                    if taken:
+                        raise ProductHasMovements(taken)
+
+                    for row in existentes:
+                        if row["precio_compra"] is not None:
+                            cursor.execute(
+                                "UPDATE products SET precio_compra = %(precio)s WHERE id = %(id)s",
+                                {"precio": row["precio_compra"], "id": row["producto_id"]})
+                        if row["existencia"]:
+                            cursor.execute("SELECT precio_compra FROM products WHERE id = %(id)s",
+                                           {"id": row["producto_id"]})
+                            precio = cursor.fetchone()["precio_compra"]
+                            self._insert_initial_stock(cursor, row["producto_id"], row["existencia"],
+                                                       precio, usuario_id, motivo)
+
+                    for row in nuevos:
+                        cursor.execute(self.PRODUCT_INSERT, row)
+                        if row["existencia"]:
+                            self._insert_initial_stock(cursor, cursor.lastrowid, row["existencia"],
+                                                       row["precio_compra"], usuario_id, motivo)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise

@@ -194,7 +194,8 @@ create table movements(
 	id int AUTO_INCREMENT not null,
 	-- HU-14: 'anulacion' resta lo que sumó una entrada anulada (no se borra nada)
 	-- HU-34: 'ajuste_mas' suma y 'ajuste_menos' resta lo que no cuadró en un conteo físico
-	tipo enum('entrada', 'venta', 'dano', 'uso', 'anulacion', 'ajuste_mas', 'ajuste_menos') not null,
+	-- inicial (HU-31): lo que ya había al empezar a usar el sistema; suma como una entrada
+	tipo enum('entrada', 'venta', 'dano', 'uso', 'anulacion', 'ajuste_mas', 'ajuste_menos', 'inicial') not null,
 	-- Siempre en unidad base y siempre positiva: el tipo dice si suma o resta.
 	-- En una entrada es lo que llegó de verdad (HU-12)
 	cantidad decimal(10,3) not null check (cantidad > 0),

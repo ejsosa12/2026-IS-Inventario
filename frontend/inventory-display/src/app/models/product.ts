@@ -31,6 +31,9 @@ export interface NewProduct {
   stock_minimo: number | null; // null = no alerts (HU-21)
   categoria_id: number; // HU-05: required
   presentaciones?: NewPresentation[]; // optional, empty = bought in the base unit
+  // HU-31 by hand: what there is today and what it cost (required when existencia > 0)
+  existencia?: number | null;
+  precio_compra?: number | null;
 }
 
 // What Flask returns after creating it

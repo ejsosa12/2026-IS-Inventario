@@ -86,6 +86,10 @@ export const routes: Routes = [
         path: 'counts', loadComponent: () => import('./utils/counts/counts').then(c => c.Counts)
       },
       {
+        // HU-31: load what the store already has from Excel. Owner only
+        path: 'products/import', canActivate: [adminGuard], loadComponent: () => import('./utils/initial-load/initial-load').then(c => c.InitialLoad)
+      },
+      {
         // HU-33: system stock vs counted, with the money. Owner only
         path: 'counts/compare/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/count-compare/count-compare').then(c => c.CountCompare)
       },
