@@ -30,6 +30,10 @@ class EntryAlreadyVoided(Exception):
     """HU-14: the entry is already voided (maybe someone else voided it a moment ago)."""
 
 
+class CountAlreadyOpen(Exception):
+    """HU-32: only one physical count can be open at a time (uq_counts_abierto)."""
+
+
 class AccessData:
     """Acceso a la base de datos MySQL local.
 
@@ -990,3 +994,108 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query)
                 return cursor.fetchall()
+
+    # ------------------------------------------------------------
+    # HU-32/33/34: physical count. Only one open at a time
+    # ------------------------------------------------------------
+
+    COUNT_SELECT = """
+        SELECT c.id, c.estado, c.creado_en, c.creado_por AS creado_por_id, u.nombre AS creado_por,
+               c.cerrado_en, c.cerrado_por AS cerrado_por_id, uc.nombre AS cerrado_por,
+               (SELECT COUNT(*) FROM count_items i WHERE i.conteo_id = c.id) AS productos,
+               (SELECT COUNT(*) FROM count_items i WHERE i.conteo_id = c.id AND i.contado IS NOT NULL)
+                   AS contados
+        FROM counts c
+        JOIN users u ON u.users = c.creado_por
+        LEFT JOIN users uc ON uc.users = c.cerrado_por
+    """
+
+    def get_open_count(self):
+        """El conteo abierto, o None si no hay."""
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(self.COUNT_SELECT + "WHERE c.estado = 'abierto'")
+                return cursor.fetchone()
+
+    def get_count_by_id(self, count_id):
+        """Un conteo (sin sus productos), o None si no existe."""
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(self.COUNT_SELECT + "WHERE c.id = %(id)s", {"id": count_id})
+                return cursor.fetchone()
+
+    def get_count_items(self, count_id):
+        """Los productos de un conteo, por categoría y nombre. Sin existencia (HU-32: honest count)."""
+        query = """
+            SELECT i.id, i.producto_id, p.codigo, p.nombre, p.unidad_base, p.activo,
+                   p.categoria_id, c.nombre AS categoria,
+                   i.contado, i.contado_en, i.contado_por AS contado_por_id, u.nombre AS contado_por
+            FROM count_items i
+            JOIN products p ON p.id = i.producto_id
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            LEFT JOIN users u ON u.users = i.contado_por
+            WHERE i.conteo_id = %(id)s
+            ORDER BY c.nombre, p.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": count_id})
+                return cursor.fetchall()
+
+    # Products that go into a count of these categories: the active ones, and the inactive
+    # ones that still have stock (they are still on the shelf)
+    COUNT_PRODUCTS_WHERE = """
+        WHERE p.categoria_id IN ({placeholders})
+          AND (p.activo = true
+               OR (SELECT COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.cantidad ELSE -m.cantidad END), 0)
+                   FROM movements m WHERE m.producto_id = p.id) > 0)
+    """
+
+    def count_products_in_categories(self, categoria_ids):
+        """Cuántos productos entrarían en un conteo de esas categorías."""
+        placeholders = ", ".join(["%s"] * len(categoria_ids))
+        query = "SELECT COUNT(*) AS n FROM products p " + \
+            self.COUNT_PRODUCTS_WHERE.format(placeholders=placeholders)
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, tuple(categoria_ids))
+                return cursor.fetchone()["n"]
+
+    def add_count(self, categoria_ids, usuario_id):
+        """Abre un conteo con los productos de esas categorías y devuelve su id.
+
+        Lanza CountAlreadyOpen si ya hay uno abierto (the UNIQUE on conteo_abierto decides,
+        so two people starting one at the same time cannot both succeed).
+        """
+        placeholders = ", ".join(["%s"] * len(categoria_ids))
+        items_query = "INSERT INTO count_items (conteo_id, producto_id) SELECT %s, p.id FROM products p " + \
+            self.COUNT_PRODUCTS_WHERE.format(placeholders=placeholders)
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("INSERT INTO counts (creado_por) VALUES (%(usuario_id)s)",
+                                   {"usuario_id": usuario_id})
+                    count_id = cursor.lastrowid
+                    cursor.execute(items_query, (count_id, *categoria_ids))
+                conn.commit()
+            except pymysql.err.IntegrityError as error:
+                conn.rollback()
+                if "uq_counts_abierto" in str(error):
+                    raise CountAlreadyOpen() from error
+                raise
+            except Exception:
+                conn.rollback()
+                raise
+            return count_id
+
+    def cancel_count(self, count_id, usuario_id):
+        """Cancela un conteo abierto. True si se canceló, False si no estaba abierto."""
+        query = """
+            UPDATE counts SET estado = 'cancelado', cerrado_por = %(usuario_id)s, cerrado_en = NOW()
+            WHERE id = %(id)s AND estado = 'abierto'
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                changed = cursor.execute(query, {"id": count_id, "usuario_id": usuario_id})
+            conn.commit()
+            return changed == 1

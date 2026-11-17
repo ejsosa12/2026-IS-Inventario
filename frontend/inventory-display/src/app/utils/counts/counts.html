@@ -1,1 +1,135 @@
-<p>counts works!</p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 py-4">
+      <h1 class="text-2xl font-semibold text-gray-900">Conteo Físico</h1>
+      <p class="text-gray-600 text-sm mt-1">Imprima las hojas, cuente lo que hay en el estante y anótelo</p>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6 max-w-4xl">
+
+    @if (notice()) {
+      <div class="px-4 py-3 rounded-lg bg-green-100 text-green-800 text-sm font-medium">{{ notice() }}</div>
+    }
+    @if (error()) {
+      <div class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</div>
+    }
+
+    @if (loading()) {
+      <p class="text-sm text-gray-700">Cargando...</p>
+    } @else if (current(); as c) {
+
+      <!-- The open count -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Conteo #{{ c.id }}
+              <span class="ml-2 align-middle inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Abierto</span>
+            </h3>
+            <p class="text-gray-600 text-sm">Iniciado por {{ c.creado_por }} el {{ c.creado_en | date: 'dd/MM/yyyy HH:mm' }}</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <!-- HU-32: opens the sheets in a new tab, without the sidebar -->
+            <a [routerLink]="['/print/count', c.id]" target="_blank"
+               class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-print mr-1"></i> Imprimir hojas
+            </a>
+            @if (isAdmin()) {
+              <button type="button" (click)="cancel()" [disabled]="saving()"
+                      class="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50">
+                Cancelar conteo
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="rounded-lg border border-gray-200 p-4">
+              <p class="text-sm text-gray-500">Productos a contar</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ c.productos }}</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 p-4">
+              <p class="text-sm text-gray-500">Ya anotados</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ c.contados }} de {{ c.productos }}</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 p-4">
+              <p class="text-sm text-gray-500">Hojas</p>
+              <p class="text-2xl font-semibold text-gray-900">{{ perCategory().length }}</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-sm font-medium text-gray-700 mb-2">Una hoja por categoría</p>
+            <ul class="divide-y divide-gray-100 border border-gray-200 rounded-lg text-sm">
+              @for (cat of perCategory(); track cat.name) {
+                <li class="px-4 py-2 flex justify-between">
+                  <span class="text-gray-900">{{ cat.name }}</span>
+                  <span class="text-gray-500">{{ cat.productos }} {{ cat.productos === 1 ? 'producto' : 'productos' }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+
+          <p class="text-sm text-gray-500">
+            <i class="fas fa-info-circle mr-1"></i>
+            Mientras este conteo esté abierto no se puede iniciar otro.
+          </p>
+        </div>
+      </div>
+
+    } @else {
+
+      <!-- No open count: start one -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-900">Nuevo conteo</h3>
+          <p class="text-gray-600 text-sm">Elija las categorías que se van a contar. Sale una hoja por categoría</p>
+        </div>
+
+        <div class="p-6 space-y-4">
+          @if (countable().length) {
+            <label class="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" class="w-4 h-4">
+              Todas las categorías
+            </label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              @for (cat of countable(); track cat.id) {
+                <label class="flex items-center justify-between gap-2 px-4 py-3 border rounded-lg cursor-pointer transition-colors"
+                       [class]="selected().has(cat.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'">
+                  <span class="flex items-center gap-2 text-sm text-gray-900">
+                    <input type="checkbox" [checked]="selected().has(cat.id)" (change)="toggle(cat.id)" class="w-4 h-4">
+                    {{ cat.nombre }}
+                    @if (!cat.activo) {
+                      <span class="text-xs text-gray-500">(inactiva)</span>
+                    }
+                  </span>
+                  <span class="text-xs text-gray-500">{{ cat.productos }} {{ cat.productos === 1 ? 'producto' : 'productos' }}</span>
+                </label>
+              }
+            </div>
+          } @else {
+            <p class="text-sm text-gray-500">No hay categorías con productos para contar</p>
+          }
+
+          <div class="flex justify-end">
+            <button type="button" (click)="start()" [disabled]="!selected().size || saving()"
+                    class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <i class="fas fa-play mr-1"></i>
+              {{ saving() ? 'Iniciando...' : 'Iniciar conteo' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </main>
+</div>

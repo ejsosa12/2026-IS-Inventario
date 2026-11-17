@@ -82,6 +82,10 @@ export const routes: Routes = [
         path: 'outputs', loadComponent: () => import('./utils/outputs/outputs').then(o => o.Outputs)
       },
       {
+        // HU-32/33/34: physical count. Anyone starts one; the owner applies it
+        path: 'counts', loadComponent: () => import('./utils/counts/counts').then(c => c.Counts)
+      },
+      {
         // HU-26 (and future reports): money, owner only
         path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },
@@ -94,6 +98,12 @@ export const routes: Routes = [
         path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },
     ]
+  },
+
+  // HU-32: the count sheets, outside 'content' so they print without the sidebar
+  {path: 'print/count/:id',
+    canActivate: [authGuard],
+    loadComponent: () => import('./utils/count-sheet/count-sheet').then(c => c.CountSheet)
   },
 
     // Redirects user in case route es empty

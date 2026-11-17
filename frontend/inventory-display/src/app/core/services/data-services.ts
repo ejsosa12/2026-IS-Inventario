@@ -14,6 +14,7 @@ import {
 import { NewSupplier, Supplier } from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
+import { Count, CountDetail } from '../../models/count';
 import { InventoryValue } from '../../models/report';
 import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
@@ -212,5 +213,32 @@ export class DataServices {
     return this.http
       .get<ApiResponse<InventoryValue>>(`${this.API_URL}/inventory-value`)
       .pipe(map((response) => response.data as InventoryValue));
+  }
+
+  // HU-32: the open physical count, or null when there is none
+  getCurrentCount() {
+    return this.http
+      .get<ApiResponse<Count | null>>(`${this.API_URL}/counts/current`)
+      .pipe(map((response) => response.data ?? null));
+  }
+
+  getCount(id: number) {
+    return this.http
+      .get<ApiResponse<CountDetail>>(`${this.API_URL}/counts/${id}`)
+      .pipe(map((response) => response.data as CountDetail));
+  }
+
+  // Anyone can start one. A 409 means there is already an open count
+  addCount(categoriaIds: number[]) {
+    return this.http
+      .post<ApiResponse<CountDetail>>(`${this.API_URL}/add-count`, { categoria_ids: categoriaIds })
+      .pipe(map((response) => response.data as CountDetail));
+  }
+
+  // Owner only
+  cancelCount(id: number) {
+    return this.http
+      .put<ApiResponse<Count>>(`${this.API_URL}/cancel-count/${id}`, {})
+      .pipe(map((response) => response.data as Count));
   }
 }

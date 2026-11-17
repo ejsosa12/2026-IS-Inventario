@@ -154,12 +154,47 @@ create table entries(
 	CONSTRAINT fk_entries_anulada_por FOREIGN KEY(anulada_por) REFERENCES users(users)
 );
 
+-- HU-32/33/34: un conteo físico. Solo uno abierto a la vez
+create table counts(
+	id int AUTO_INCREMENT not null,
+	estado enum('abierto', 'aplicado', 'cancelado') not null default 'abierto',
+	creado_por int not null,
+	creado_en datetime not null default current_timestamp,
+	-- Quién lo aplicó (HU-34) o lo canceló, y cuándo
+	cerrado_por int,
+	cerrado_en datetime,
+	-- 1 mientras está abierto, NULL después: el UNIQUE deja un solo conteo abierto
+	conteo_abierto tinyint as (if(estado = 'abierto', 1, null)) persistent,
+	PRIMARY KEY(id),
+	CONSTRAINT uq_counts_abierto UNIQUE(conteo_abierto),
+	CONSTRAINT chk_counts_cerrado CHECK (estado = 'abierto' OR (cerrado_por IS NOT NULL AND cerrado_en IS NOT NULL)),
+	FOREIGN KEY(creado_por) REFERENCES users(users),
+	FOREIGN KEY(cerrado_por) REFERENCES users(users)
+);
+
+-- Los productos que entran en el conteo y lo que se contó de cada uno (HU-33)
+create table count_items(
+	id int AUTO_INCREMENT not null,
+	conteo_id int not null,
+	producto_id int not null,
+	-- NULL = todavía no se ha contado. En unidad base
+	contado decimal(10,3) check (contado >= 0),
+	contado_por int,
+	contado_en datetime,
+	PRIMARY KEY(id),
+	UNIQUE(conteo_id, producto_id),
+	FOREIGN KEY(conteo_id) REFERENCES counts(id),
+	FOREIGN KEY(producto_id) REFERENCES products(id),
+	FOREIGN KEY(contado_por) REFERENCES users(users)
+);
+
 -- HU-11, HU-12, HU-15, HU-16, HU-17, HU-28
 -- Todo cambio de existencia pasa por aquí
 create table movements(
 	id int AUTO_INCREMENT not null,
 	-- HU-14: 'anulacion' resta lo que sumó una entrada anulada (no se borra nada)
-	tipo enum('entrada', 'venta', 'dano', 'uso', 'anulacion') not null,
+	-- HU-34: 'ajuste_mas' suma y 'ajuste_menos' resta lo que no cuadró en un conteo físico
+	tipo enum('entrada', 'venta', 'dano', 'uso', 'anulacion', 'ajuste_mas', 'ajuste_menos') not null,
 	-- Siempre en unidad base y siempre positiva: el tipo dice si suma o resta.
 	-- En una entrada es lo que llegó de verdad (HU-12)
 	cantidad decimal(10,3) not null check (cantidad > 0),
@@ -182,15 +217,19 @@ create table movements(
 	entrada_id int,
 	-- HU-06: en qué presentación llegó (caja, rollo). NULL = en unidad base
 	presentacion_id int,
+	-- HU-34: conteo del que salió el ajuste. NULL en el resto
+	conteo_id int,
 	PRIMARY KEY(id),
-	-- Daño, uso interno y anulación siempre llevan motivo
+	-- Daño, uso interno, anulación y ajustes siempre llevan motivo
 	CONSTRAINT chk_movements_motivo
-		CHECK (tipo NOT IN ('dano', 'uso', 'anulacion') OR (motivo IS NOT NULL AND motivo <> '')),
+		CHECK (tipo NOT IN ('dano', 'uso', 'anulacion', 'ajuste_mas', 'ajuste_menos')
+		       OR (motivo IS NOT NULL AND motivo <> '')),
 	FOREIGN KEY(producto_id) REFERENCES products(id),
 	FOREIGN KEY(usuario_id) REFERENCES users(users),
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),
 	FOREIGN KEY(entrada_id) REFERENCES entries(id),
-	FOREIGN KEY(presentacion_id) REFERENCES presentations(id)
+	FOREIGN KEY(presentacion_id) REFERENCES presentations(id),
+	FOREIGN KEY(conteo_id) REFERENCES counts(id)
 );
 
 -- ============================================================
