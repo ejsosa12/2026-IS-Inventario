@@ -1,0 +1,32 @@
+/* HU-32: on paper only the sheets come out, one per page */
+@page {
+  margin: 12mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .sheets-page {
+    background: white !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .sheet {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+  }
+
+  .sheet:last-child {
+    break-after: auto;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}

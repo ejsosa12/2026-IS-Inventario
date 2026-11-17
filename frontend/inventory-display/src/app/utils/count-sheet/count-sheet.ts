@@ -14,6 +14,7 @@ import { UnidadBase } from '../../models/product';
   imports: [DatePipe],
   selector: 'app-count-sheet',
   templateUrl: './count-sheet.html',
+  styleUrl: './count-sheet.css',
 })
 export class CountSheet {
   private dataServices = inject(DataServices);
