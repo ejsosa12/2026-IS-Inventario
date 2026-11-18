@@ -1,4 +1,4 @@
-# Local stack: MariaDB + Flask + Angular (dev server). Values like ${DB_PASSWORD}
+# Local stack: MariaDB + Flask (gunicorn) + Angular served by nginx. Values like ${DB_PASSWORD}
 # come from the .env file next to this one (copy .env.example).
 services:
   db:
@@ -34,8 +34,7 @@ services:
       FLASK_KEY: ${FLASK_KEY}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8}
-    ports:
-      - "5000:5000"
+    # No "ports": Flask is only reachable inside the Docker network, through nginx
     depends_on:
       db:
         condition: service_healthy
@@ -43,7 +42,8 @@ services:
   frontend:
     build: ./frontend/inventory-display
     ports:
-      - "4200:4200"
+      # host 4200 -> nginx listening on 80 inside the container
+      - "4200:80"
     depends_on:
       - backend
 

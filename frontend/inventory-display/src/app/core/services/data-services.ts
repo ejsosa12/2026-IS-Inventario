@@ -34,7 +34,7 @@ import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../.
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
 @Service()
 export class DataServices {
-  private readonly API_URL = 'http://localhost:5000/api/v1';
+  private readonly API_URL = '/api/v1';
   private http = inject(HttpClient);
 
   getProducts() {

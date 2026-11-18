@@ -41,7 +41,7 @@ export interface LoginResponse {
 
 @Service()
 export class AuthService {
-  private readonly API_URL = 'http://localhost:5000/api/v1';
+  private readonly API_URL = '/api/v1';
   readonly LOGIN_URL = `${this.API_URL}/login`;
 
   private http = inject(HttpClient);
