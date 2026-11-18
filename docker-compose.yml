@@ -1,0 +1,51 @@
+# Local stack: MariaDB + Flask + Angular (dev server). Values like ${DB_PASSWORD}
+# come from the .env file next to this one (copy .env.example).
+services:
+  db:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: inventory
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      # Data survives `docker compose down`; only `down -v` deletes it
+      - db_data:/var/lib/mysql
+      # Every .sql here runs once, the first time the volume is empty
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # 3307 on the host so it does not clash with the local MariaDB on 3306
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      # "db" is the service name above: Docker's internal DNS resolves it
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: inventory
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FLASK_KEY: ${FLASK_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8}
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend/inventory-display
+    ports:
+      - "4200:4200"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

@@ -1,0 +1,9 @@
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+# Secrets come from docker-compose environment, never baked into the image
+app/.env
+.env
+# Dumps are not needed inside the backend image
+*.sql
