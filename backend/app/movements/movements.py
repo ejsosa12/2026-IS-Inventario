@@ -449,7 +449,6 @@ def _history_row_to_json(row):
         "fecha": row["fecha"].isoformat(),
         # Signed: + came in, - went out
         "cantidad": float(row["cambio"]),
-        "existencia": float(row["existencia"]),
         "usuario_id": row["usuario_id"],
         "usuario": row["usuario"],
         "motivo": row["motivo"],
@@ -468,6 +467,13 @@ def _history_row_to_json(row):
         "presentacion": row["presentacion"],
         "cantidad_presentacion": float(row["cantidad"] / factor) if factor else None,
     }
+    # HU-20: stock right after the movement (only in a single product's kárdex)
+    if "existencia" in row:
+        data["existencia"] = float(row["existencia"])
+    # HU-27: the report mixes products, so each row says which one
+    if "codigo" in row:
+        data.update({"producto_id": row["producto_id"], "codigo": row["codigo"],
+                     "producto": row["producto"], "unidad_base": row["unidad_base"]})
     return data
 
 
@@ -520,6 +526,64 @@ def get_product_movements(product_id):
             "total": total,
             "page": page,
             "pages": pages,
+            "per_page": per_page,
+        },
+    }, 200
+
+
+@movements.route('api/v1/movements', methods=['GET'])
+@requiere_rol('admin')  # HU-27: "qué se movió ayer, y qué registró cada uno de los muchachos"
+def get_movements():
+    """?desde=&hasta=&tipo=&usuario_id=&page=&per_page=. Same date rules as the kárdex."""
+    desde, error = _read_date("desde")
+    if error:
+        return _error(error)
+    hasta, error = _read_date("hasta")
+    if error:
+        return _error(error)
+    if desde and hasta and desde > hasta:
+        return _error("desde must not be after hasta")
+
+    tipo = request.args.get("tipo", "").strip() or None
+    if tipo is not None and tipo not in AccessData.MOVEMENT_TYPES:
+        return _error(f"tipo must be one of: {', '.join(AccessData.MOVEMENT_TYPES)}")
+    usuario_id = None
+    if request.args.get("usuario_id", "").strip():
+        usuario_id = _read_positive_int("usuario_id", None)
+        if usuario_id is None:
+            return _error("usuario_id must be a whole number greater than 0")
+
+    page = _read_positive_int("page", 1)
+    if page is None:
+        return _error("page must be a whole number greater than 0")
+    per_page = _read_positive_int("per_page", HISTORY_PAGE_SIZES[0])
+    if per_page not in HISTORY_PAGE_SIZES:
+        return _error("per_page must be 25, 50 or 100")
+
+    result = AccessData().get_movements(
+        # desde from 00:00; hasta includes that whole day
+        desde=datetime.combine(desde, time.min) if desde else None,
+        hasta=datetime.combine(hasta + timedelta(days=1), time.min) if hasta else None,
+        tipo=tipo,
+        usuario_id=usuario_id,
+        limit=per_page,
+        offset=(page - 1) * per_page,
+    )
+    total = result["total"]
+    return {
+        "status": 0,
+        "message": "SUCCESS: movements",
+        "data": {
+            "movimientos": [_history_row_to_json(row) for row in result["movimientos"]],
+            "por_tipo": [{
+                "tipo": row["tipo"],
+                "movimientos": row["movimientos"],
+                "dinero": float(row["dinero"].quantize(TWO_DECIMALS)) if row["dinero"] is not None else None,
+            } for row in result["por_tipo"]],
+            "por_usuario": result["por_usuario"],
+            "total": total,
+            "page": page,
+            "pages": max(1, -(-total // per_page)),
             "per_page": per_page,
         },
     }, 200

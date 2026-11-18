@@ -58,3 +58,32 @@ export interface ProductHistoryFilter {
   page?: number;
   per_page?: number;
 }
+
+// HU-27: one row of the movements report (every product, so each row says which one)
+export interface ReportMovement extends Omit<ProductMovement, 'existencia'> {
+  producto_id: number;
+  codigo: string;
+  producto: string;
+  unidad_base: UnidadBase;
+}
+
+export interface MovementsReport {
+  movimientos: ReportMovement[];
+  // The whole range. por_tipo ignores the type filter and por_usuario the user filter,
+  // so the other options show their numbers too
+  por_tipo: { tipo: MovementTipo; movimientos: number; dinero: number | null }[];
+  por_usuario: { usuario_id: number; usuario: string; movimientos: number }[];
+  total: number;
+  page: number;
+  pages: number;
+  per_page: number;
+}
+
+export interface MovementsFilter {
+  desde?: string | null; // YYYY-MM-DD
+  hasta?: string | null;
+  tipo?: MovementTipo | null;
+  usuario_id?: number | null;
+  page?: number;
+  per_page?: number;
+}

@@ -23,7 +23,12 @@ import {
   CountItemInput,
 } from '../../models/count';
 import { InventoryValue } from '../../models/report';
-import { ProductHistory, ProductHistoryFilter } from '../../models/movement';
+import {
+  MovementsFilter,
+  MovementsReport,
+  ProductHistory,
+  ProductHistoryFilter,
+} from '../../models/movement';
 import { CorrectEntry, Entry, EntryListItem, NewEntry, Presentation } from '../../models/entry';
 
 // Talks to the Flask API. The auth-interceptor adds the Bearer token to every request
@@ -315,5 +320,18 @@ export class DataServices {
     return this.http
       .get<ApiResponse<SupplierPurchase[]>>(`${this.API_URL}/products/${id}/suppliers`)
       .pipe(map((response) => response.data as SupplierPurchase[]));
+  }
+
+  // HU-27 (owner only): every movement, filtered by date, type and user, one page at a time
+  getMovements(filter: MovementsFilter = {}) {
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(filter)) {
+      if (value != null && value !== '') {
+        params[key] = String(value);
+      }
+    }
+    return this.http
+      .get<ApiResponse<MovementsReport>>(`${this.API_URL}/movements`, { params })
+      .pipe(map((response) => response.data as MovementsReport));
   }
 }

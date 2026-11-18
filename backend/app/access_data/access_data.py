@@ -1423,3 +1423,77 @@ class AccessData:
             with conn.cursor() as cursor:
                 cursor.execute(query, {"id": supplier_id})
                 return cursor.fetchone()
+
+    # ------------------------------------------------------------
+    # HU-27: every movement, filtered by date, type and user
+    # ------------------------------------------------------------
+
+    MOVEMENT_TYPES = ("entrada", "venta", "dano", "uso", "anulacion", "ajuste_mas", "ajuste_menos",
+                      "inicial")
+
+    @staticmethod
+    def _movement_filters(desde, hasta, tipo, usuario_id, skip=()):
+        """WHERE for the movements report. skip leaves out one filter, so the summary per type
+        ignores the type filter (and the one per user the user filter): the owner can see the
+        other options with their numbers and click them."""
+        conditions = ["(%(desde)s IS NULL OR m.fecha >= %(desde)s)",
+                      "(%(hasta)s IS NULL OR m.fecha < %(hasta)s)"]
+        if tipo and "tipo" not in skip:
+            conditions.append("m.tipo = %(tipo)s")
+        if usuario_id and "usuario" not in skip:
+            conditions.append("m.usuario_id = %(usuario_id)s")
+        return "WHERE " + " AND ".join(conditions)
+
+    def get_movements(self, desde=None, hasta=None, tipo=None, usuario_id=None, limit=25, offset=0):
+        """HU-27: one page of movements (newest first) plus the totals of the whole range.
+
+        desde inclusive, hasta exclusive (datetimes). Returns {"total", "movimientos",
+        "por_tipo": [{tipo, movimientos, dinero}], "por_usuario": [{usuario_id, usuario, movimientos}]}.
+        dinero = SUM(cantidad × precio): quantities are not added up because lb, m and units mix.
+        """
+        params = {"desde": desde, "hasta": hasta, "tipo": tipo, "usuario_id": usuario_id,
+                  "limit": limit, "offset": offset}
+        where = self._movement_filters(desde, hasta, tipo, usuario_id)
+        list_query = f"""
+            SELECT m.id, m.tipo, m.cantidad, {STOCK_CHANGE} AS cambio, m.precio, m.motivo, m.fecha,
+                   m.producto_id, p.codigo, p.nombre AS producto, p.unidad_base,
+                   m.usuario_id, u.nombre AS usuario,
+                   m.proveedor_id, s.nombre AS proveedor,
+                   m.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, m.conteo_id,
+                   pr.nombre AS presentacion, pr.factor
+            FROM movements m
+            JOIN products p ON p.id = m.producto_id
+            JOIN users u ON u.users = m.usuario_id
+            LEFT JOIN suppliers s ON s.id = m.proveedor_id
+            LEFT JOIN entries e ON e.id = m.entrada_id
+            LEFT JOIN presentations pr ON pr.id = m.presentacion_id
+            {where}
+            ORDER BY m.fecha DESC, m.id DESC
+            LIMIT %(limit)s OFFSET %(offset)s
+        """
+        count_query = f"SELECT COUNT(*) AS total FROM movements m {where}"
+        type_query = f"""
+            SELECT m.tipo, COUNT(*) AS movimientos, SUM(m.cantidad * m.precio) AS dinero
+            FROM movements m
+            {self._movement_filters(desde, hasta, tipo, usuario_id, skip=("tipo",))}
+            GROUP BY m.tipo
+        """
+        user_query = f"""
+            SELECT m.usuario_id, u.nombre AS usuario, COUNT(*) AS movimientos
+            FROM movements m
+            JOIN users u ON u.users = m.usuario_id
+            {self._movement_filters(desde, hasta, tipo, usuario_id, skip=("usuario",))}
+            GROUP BY m.usuario_id, u.nombre
+            ORDER BY movimientos DESC, u.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(list_query, params)
+                rows = cursor.fetchall()
+                cursor.execute(count_query, params)
+                total = cursor.fetchone()["total"]
+                cursor.execute(type_query, params)
+                por_tipo = cursor.fetchall()
+                cursor.execute(user_query, params)
+                por_usuario = cursor.fetchall()
+        return {"total": total, "movimientos": rows, "por_tipo": por_tipo, "por_usuario": por_usuario}

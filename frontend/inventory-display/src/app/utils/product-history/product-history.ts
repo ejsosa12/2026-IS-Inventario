@@ -5,8 +5,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { DataServices } from '../../core/services/data-services';
+import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
 import {
-  MovementTipo,
   ProductHistory as History,
   ProductMovement,
 } from '../../models/movement';
@@ -32,16 +32,7 @@ export class ProductHistory {
   readonly productId = Number(this.route.snapshot.paramMap.get('id'));
   readonly pageSizes = [25, 50, 100];
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
-  readonly tipos: Record<MovementTipo, { label: string; classes: string }> = {
-    entrada: { label: 'Compra', classes: 'bg-green-100 text-green-800' },
-    venta: { label: 'Venta', classes: 'bg-yellow-100 text-yellow-800' },
-    dano: { label: 'Merma', classes: 'bg-red-100 text-red-800' },
-    uso: { label: 'Uso interno', classes: 'bg-blue-100 text-blue-800' },
-    anulacion: { label: 'Anulación', classes: 'bg-purple-100 text-purple-800' },
-    ajuste_mas: { label: 'Ajuste (+)', classes: 'bg-indigo-100 text-indigo-800' },
-    ajuste_menos: { label: 'Ajuste (−)', classes: 'bg-pink-100 text-pink-800' },
-    inicial: { label: 'Inventario inicial', classes: 'bg-gray-100 text-gray-800' },
-  };
+  readonly tipos = MOVEMENT_TYPES;
   readonly shortcuts: { value: Shortcut; label: string }[] = [
     { value: '7', label: 'Últimos 7 días' },
     { value: '30', label: 'Últimos 30 días' },
