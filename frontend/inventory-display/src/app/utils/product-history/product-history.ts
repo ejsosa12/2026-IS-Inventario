@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
 import {
   ProductHistory as History,
@@ -32,6 +33,8 @@ export class ProductHistory {
   readonly productId = Number(this.route.snapshot.paramMap.get('id'));
   readonly pageSizes = [25, 50, 100];
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+  readonly pres = injectPresentations();
   readonly tipos = MOVEMENT_TYPES;
   readonly shortcuts: { value: Shortcut; label: string }[] = [
     { value: '7', label: 'Últimos 7 días' },

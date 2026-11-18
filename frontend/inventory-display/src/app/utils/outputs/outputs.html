@@ -69,7 +69,7 @@
             <div class="flex items-center justify-between px-4 py-3 border border-blue-600 bg-blue-50 rounded-lg">
               <div>
                 <p class="text-sm font-medium text-gray-900">{{ product.codigo }} · {{ product.nombre }}</p>
-                <p class="text-xs text-gray-600">Hay {{ amount(product.existencia, product.unidad_base) }} en existencia</p>
+                <p class="text-xs text-gray-600">Hay {{ amount(product.existencia, product.unidad_base) }} {{ pres(product.id, product.existencia) }} en existencia</p>
               </div>
               <button type="button" (click)="clearProduct()"
                       class="px-3 py-1 text-sm border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-100 transition-colors">
@@ -93,7 +93,7 @@
                         </span>
                         <span class="text-xs whitespace-nowrap"
                               [class]="product.existencia > 0 ? 'text-gray-500' : 'text-red-600'">
-                          {{ amount(product.existencia, product.unidad_base) }}
+                          {{ amount(product.existencia, product.unidad_base) }} {{ pres(product.id, product.existencia) }}
                         </span>
                       </button>
                     </li>
@@ -188,7 +188,10 @@
                     <div class="text-sm font-medium text-gray-900">{{ output.producto }}</div>
                     <div class="text-sm text-gray-500">{{ output.codigo }}</div>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ amount(output.cantidad, output.unidad_base) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {{ amount(output.cantidad, output.unidad_base) }}
+                    <span class="font-normal text-xs text-gray-500">{{ pres(output.producto_id, output.cantidad) }}</span>
+                  </td>
                   <!-- At the last purchase price when it left -->
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     @if (output.costo !== null) {

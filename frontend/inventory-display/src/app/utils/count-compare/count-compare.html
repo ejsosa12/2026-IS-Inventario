@@ -201,11 +201,15 @@
                   </td>
                   <td class="px-6 py-3 text-gray-700">{{ item.categoria ?? 'Sin categoría' }}</td>
                   @if (isOpen()) {
-                    <td class="px-6 py-3 text-gray-900 whitespace-nowrap">{{ quantity(item.existencia, item.unidad_base) }}</td>
+                    <td class="px-6 py-3 text-gray-900 whitespace-nowrap">
+                      {{ quantity(item.existencia, item.unidad_base) }}
+                      <span class="font-normal text-xs text-gray-500">{{ pres(item.producto_id, item.existencia) }}</span>
+                    </td>
                   }
                   <td class="px-6 py-3 whitespace-nowrap">
                     @if (item.contado !== null) {
                       <span class="text-gray-900">{{ quantity(item.contado, item.unidad_base) }}</span>
+                      <span class="font-normal text-xs text-gray-500">{{ pres(item.producto_id, item.contado) }}</span>
                       <div class="text-xs text-gray-500">{{ item.contado_por }} · {{ item.contado_en | date: 'dd/MM HH:mm' }}</div>
                     } @else {
                       <span class="italic text-gray-400">Sin contar</span>
@@ -215,6 +219,7 @@
                   @if (isOpen()) {
                     <td class="px-6 py-3 whitespace-nowrap" [class]="signClass(item.diferencia)">
                       {{ item.diferencia !== null ? signed(item.diferencia, item.unidad_base) : '—' }}
+                      <span class="font-normal text-xs text-gray-500">{{ pres(item.producto_id, item.diferencia) }}</span>
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap" [class]="signClass(item.dinero)">
                       @if (item.dinero !== null) {
@@ -253,6 +258,7 @@
                   } @else {
                     <td class="px-6 py-3 whitespace-nowrap" [class]="signClass(item.ajuste?.cantidad)">
                       {{ item.ajuste ? signed(item.ajuste.cantidad, item.unidad_base) : '—' }}
+                      <span class="font-normal text-xs text-gray-500">{{ pres(item.producto_id, item.ajuste?.cantidad ?? null) }}</span>
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap" [class]="signClass(item.ajuste?.dinero)">
                       @if (item.ajuste?.dinero != null) {

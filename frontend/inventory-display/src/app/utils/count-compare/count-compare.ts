@@ -3,6 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
 import {
   ADJUSTMENT_REASONS,
@@ -49,6 +50,8 @@ export class CountCompare {
 
   readonly countId = Number(inject(ActivatedRoute).snapshot.paramMap.get('id'));
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+  readonly pres = injectPresentations();
   readonly reasons = ADJUSTMENT_REASONS;
   readonly detalleMax = DETALLE_MAX;
 

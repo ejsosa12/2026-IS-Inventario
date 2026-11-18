@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { ProductListItem, UnidadBase } from '../../models/product';
 
@@ -30,6 +31,10 @@ export class Outputs {
   private fb = inject(FormBuilder);
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+
+  readonly pres = injectPresentations();
 
   readonly texts: Record<OutputTipo, TipoTexts> = {
     dano: {
@@ -168,7 +173,8 @@ export class Outputs {
 
   // HU-18: the same text Flask's 409 turns into
   stockMessage(product: ProductListItem, existencia = product.existencia): string {
-    return `Solo hay ${this.amount(existencia, product.unidad_base)} en existencia`;
+    const pres = this.pres(product.id, existencia);
+    return `Solo hay ${this.amount(existencia, product.unidad_base)}${pres ? ' ' + pres : ''} en existencia`;
   }
 
   // Checked while typing, before going to Flask

@@ -176,11 +176,13 @@
                                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ product.existencia | number: cantidadFormat(product) }}
                                     {{ unidadLabel[product.unidad_base] }}
+                                    <span class="text-xs text-gray-500">{{ pres(product.id, product.existencia) }}</span>
                                   </td>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     @if (product.stock_minimo !== null) {
                                       {{ product.stock_minimo | number: cantidadFormat(product) }}
                                       {{ unidadLabel[product.unidad_base] }}
+                                      <span class="text-xs">{{ pres(product.id, product.stock_minimo) }}</span>
                                     } @else {
                                       —
                                     }

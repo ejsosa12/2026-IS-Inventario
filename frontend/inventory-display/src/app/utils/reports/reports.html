@@ -211,7 +211,10 @@
                     <div class="text-gray-500">{{ p.codigo }}</div>
                   </td>
                   <td class="px-6 py-3 text-gray-500">{{ categoryName(p) }}</td>
-                  <td class="px-6 py-3 text-gray-900 whitespace-nowrap">{{ amount(p) }}</td>
+                  <td class="px-6 py-3 text-gray-900 whitespace-nowrap">
+                    {{ amount(p) }}
+                    <span class="font-normal text-xs text-gray-500">{{ pres(p.id, p.existencia) }}</span>
+                  </td>
                   <td class="px-6 py-3 whitespace-nowrap">
                     @if (p.precio_compra != null) {
                       Q{{ p.precio_compra | number: '1.2-4' }} / {{ unidadLabel[p.unidad_base] }}

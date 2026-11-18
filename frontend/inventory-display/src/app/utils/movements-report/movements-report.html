@@ -170,6 +170,7 @@
                   <td class="px-6 py-3 whitespace-nowrap font-medium"
                       [class]="m.anulada ? '' : m.cantidad > 0 ? 'text-green-700' : 'text-red-700'">
                     {{ signed(m) }}
+                    <span class="font-normal text-xs text-gray-500">{{ pres(m.producto_id, m.cantidad) }}</span>
                   </td>
                   <td class="px-6 py-3 whitespace-nowrap">
                     @if (m.costo != null) { Q{{ m.costo | number: '1.2-2' }} } @else { <span class="text-gray-400">—</span> }

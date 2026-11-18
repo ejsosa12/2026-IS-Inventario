@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth-service';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
 
@@ -22,6 +23,10 @@ export class Dashboard {
   private dataServices = inject(DataServices);
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+
+  readonly pres = injectPresentations();
 
   // Out of stock first, then furthest from the minimum (Flask sorts them)
   lowStock = signal<LowStockItem[]>([]);

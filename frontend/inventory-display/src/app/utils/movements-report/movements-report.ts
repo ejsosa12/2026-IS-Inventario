@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
 import {
   MovementTipo,
@@ -36,6 +37,8 @@ export class MovementsReport {
   readonly tipos = MOVEMENT_TYPES;
   readonly tipoKeys = Object.keys(MOVEMENT_TYPES) as MovementTipo[];
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+  readonly pres = injectPresentations();
   readonly shortcuts: { value: Shortcut; label: string }[] = [
     { value: 'hoy', label: 'Hoy' },
     { value: 'ayer', label: 'Ayer' },

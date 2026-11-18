@@ -39,6 +39,7 @@
         <div class="text-right">
           <p class="text-sm text-gray-500">Existencia actual</p>
           <p class="text-2xl font-semibold text-gray-900">{{ amount(h.producto.existencia) }}</p>
+          <p class="text-xs text-gray-500 font-normal">{{ pres(productId, h.producto.existencia) }}</p>
         </div>
       </div>
     } @else if (!loading() && error()) {
@@ -141,6 +142,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Al inicio</p>
           <p class="text-xl font-semibold text-gray-900">{{ amount(h.resumen.inicio) }}</p>
+          <p class="text-xs text-gray-500 font-normal">{{ pres(productId, h.resumen.inicio) }}</p>
           <p class="text-xs text-gray-400">
             @if (desde()) { antes del {{ shortDate(desde()) }} } @else { desde el principio }
           </p>
@@ -148,14 +150,17 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Entró</p>
           <p class="text-xl font-semibold text-green-700">{{ signed(h.resumen.entro) }}</p>
+          <p class="text-xs text-gray-500 font-normal">{{ pres(productId, h.resumen.entro) }}</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Salió</p>
           <p class="text-xl font-semibold text-red-700">{{ signed(-h.resumen.salio) }}</p>
+          <p class="text-xs text-gray-500 font-normal">{{ pres(productId, h.resumen.salio) }}</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Al final</p>
           <p class="text-xl font-semibold text-gray-900">{{ amount(h.resumen.final) }}</p>
+          <p class="text-xs text-gray-500 font-normal">{{ pres(productId, h.resumen.final) }}</p>
           <p class="text-xs text-gray-400">
             @if (hasta()) { al {{ shortDate(hasta()) }} } @else { hoy }
           </p>
@@ -210,9 +215,15 @@
                     <!-- HU-06: as it came on the invoice -->
                     @if (m.presentacion && m.cantidad_presentacion != null) {
                       <p class="text-xs text-gray-400">{{ +m.cantidad_presentacion.toFixed(3) }} {{ m.presentacion }}</p>
+                    } @else {
+                      <!-- HU-08: in the biggest presentation -->
+                      <p class="text-xs text-gray-400">{{ pres(productId, m.cantidad) }}</p>
                     }
                   </td>
-                  <td class="px-6 py-3 whitespace-nowrap text-right font-medium">{{ amount(m.existencia) }}</td>
+                  <td class="px-6 py-3 whitespace-nowrap text-right font-medium">
+                    {{ amount(m.existencia) }}
+                    <p class="text-xs text-gray-400 font-normal">{{ pres(productId, m.existencia) }}</p>
+                  </td>
                   <td class="px-6 py-3 whitespace-nowrap">{{ m.usuario }}</td>
                   <td class="px-6 py-3 whitespace-nowrap text-right">
                     @if (m.costo != null) { Q{{ m.costo | number: '1.2-2' }} } @else { <span class="text-gray-400">—</span> }

@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { DataServices } from '../../core/services/data-services';
+import { injectPresentations } from '../../core/utils/two-units';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
 import { UnidadBase } from '../../models/product';
 import {
@@ -25,6 +26,10 @@ export class Reports {
   private dataServices = inject(DataServices);
 
   readonly unidadLabel: Record<UnidadBase, string> = { unidad: 'u', lb: 'lb', m: 'm', gal: 'gal' };
+
+  // HU-08: "(1.5 cajas)" next to quantities, for products bought in a presentation
+
+  readonly pres = injectPresentations();
 
   report = signal<InventoryValue | null>(null);
   loading = signal(true);

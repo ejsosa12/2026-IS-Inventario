@@ -564,9 +564,16 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold"
                                             [class]="item.agotado ? 'text-red-600' : 'text-gray-900'">
                                             {{ amount(item.existencia, item.unidad_base) }}
+                                            <span class="font-normal text-xs text-gray-500">{{ pres(item.id, item.existencia) }}</span>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ amount(item.stock_minimo, item.unidad_base) }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ amount(item.faltan, item.unidad_base) }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {{ amount(item.stock_minimo, item.unidad_base) }}
+                                            <span class="text-xs">{{ pres(item.id, item.stock_minimo) }}</span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {{ amount(item.faltan, item.unidad_base) }}
+                                            <span class="font-normal text-xs text-gray-500">{{ pres(item.id, item.faltan) }}</span>
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             @if (item.agotado) {
                                                 <span class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Agotado</span>
