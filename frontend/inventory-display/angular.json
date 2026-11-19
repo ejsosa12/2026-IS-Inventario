@@ -64,6 +64,10 @@
             },
             "development": {
               "buildTarget": "inventory-display:build:development"
+            },
+            "vps": {
+              "buildTarget": "inventory-display:build:development",
+              "proxyConfig": "proxy.vps.conf.json"
             }
           },
           "defaultConfiguration": "development"
