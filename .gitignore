@@ -119,3 +119,6 @@ frontend/inventory-display/node_modules/**
 
 # Docker: local secrets and DB init dumps (real data)
 docker/db/init/*.sql
+
+# Angular proxy to the VPS (has the server IP); template: proxy.vps.conf.example.json
+frontend/inventory-display/proxy.vps.conf.json
