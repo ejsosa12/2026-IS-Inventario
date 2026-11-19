@@ -1,0 +1,109 @@
+<!-- HU-19: stock made for a phone. Cards instead of a table; 2-3 columns on a computer -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cordes-blue': '#1e40af',
+                        'cordes-dark': '#1e293b',
+                        'cordes-light': '#f8fafc',
+                        'cordes-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<div class="min-h-screen bg-gray-100">
+  <header class="border-b border-gray-200 bg-white px-4 py-4 md:px-6">
+    <h1 class="text-xl font-semibold text-gray-900 md:text-2xl">Existencias</h1>
+    <p class="mt-1 text-sm text-gray-600">
+      Cuánto hay de cada producto
+      @if (!loading() && !error() && lowCount() > 0) {
+        · <span class="font-medium text-red-700">{{ lowCount() }} por acabarse o agotados</span>
+      }
+    </p>
+  </header>
+
+  <!-- Filters: stay on top while scrolling (below the phone bar, which is 4rem tall) -->
+  <div class="sticky top-16 z-30 space-y-2 border-b border-gray-200 bg-gray-100 px-4 py-3 md:static md:px-6">
+    <input type="search" placeholder="Buscar por nombre o código..."
+           [value]="query()" (input)="query.set($any($event.target).value)"
+           class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base
+                  focus:border-blue-500 focus:outline-none" />
+    <div class="flex gap-2">
+      <select [value]="category()" (change)="category.set($any($event.target).value)"
+              class="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base">
+        <option value="">Todas las categorías</option>
+        @for (name of categories(); track name) {
+          <option [value]="name">{{ name }}</option>
+        }
+      </select>
+      <button type="button" (click)="onlyLow.set(!onlyLow())"
+              [class]="onlyLow()
+                ? 'whitespace-nowrap rounded-lg border border-red-600 bg-red-600 px-3 py-2 text-sm font-medium text-white'
+                : 'whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700'">
+        Por acabarse
+      </button>
+    </div>
+  </div>
+
+  <main class="px-4 py-3 md:px-6">
+    @if (loading()) {
+      <p class="py-10 text-center text-gray-500">Cargando existencias...</p>
+    } @else if (error()) {
+      <p class="rounded-lg bg-red-100 px-4 py-3 text-red-800">{{ error() }}</p>
+    } @else {
+      <p class="mb-2 text-sm text-gray-500">
+        {{ shown().length }} {{ shown().length === 1 ? 'producto' : 'productos' }}
+      </p>
+
+      @if (shown().length === 0) {
+        <div class="py-10 text-center text-gray-500">
+          <p>No hay productos con esos filtros.</p>
+          <button type="button" (click)="clearFilters()" class="mt-2 text-blue-700 underline">
+            Quitar filtros
+          </button>
+        </div>
+      }
+
+      <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        @for (product of shown(); track product.id) {
+          <li class="rounded-lg bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="break-words font-semibold text-gray-900">{{ product.nombre }}</p>
+                <p class="text-xs text-gray-500">{{ product.codigo }} · {{ categoryName(product) }}</p>
+              </div>
+              <span class="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium {{ estado(product).classes }}">
+                {{ estado(product).label }}
+              </span>
+            </div>
+
+            <div class="mt-3 flex items-baseline justify-between gap-2">
+              <p>
+                <span class="text-2xl font-bold text-gray-900">
+                  {{ product.existencia | number: cantidadFormat(product) }}
+                </span>
+                <span class="text-gray-700"> {{ unidadLabel[product.unidad_base] }}</span>
+                <span class="block text-sm text-gray-500">{{ pres(product.id, product.existencia) }}</span>
+              </p>
+              @if (product.stock_minimo !== null) {
+                <p class="whitespace-nowrap text-sm text-gray-500">
+                  Mínimo {{ product.stock_minimo | number: cantidadFormat(product) }}
+                </p>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </main>
+</div>

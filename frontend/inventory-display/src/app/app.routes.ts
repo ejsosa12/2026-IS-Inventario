@@ -37,6 +37,10 @@ export const routes: Routes = [
         path: 'products', loadComponent: () => import('./utils/products/products').then(p => p.Products)
       },
       {
+        // HU-19: stock made for a phone (the only page in the phone view), every user
+        path: 'stock', loadComponent: () => import('./utils/stock/stock').then(s => s.Stock)
+      },
+      {
         path: 'products/add-product', canActivate: [adminGuard], loadComponent: () => import('./utils/add-product/add-product').then(a => a.AddProduct)
       },
       {
