@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "angular",
+  "buildCommand": "npx ng build",
+  "outputDirectory": "dist/inventory-display/browser",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://api.elbuenclavo.tech/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
