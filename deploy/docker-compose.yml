@@ -1,5 +1,5 @@
 # Backend stack for the VPS (MariaDB + Flask + nginx). The workflow copies this
-# folder to /opt/inventario; the .env with the secrets and db-init/ live only there.
+# folder to /opt/inventario; the .env with the secrets, db-init/ and certbot/ live only there.
 # The backend image is not built here: it is pulled from GHCR (built by GitHub Actions).
 services:
   db:
@@ -43,11 +43,24 @@ services:
     restart: unless-stopped
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Certificates and the challenge folder, both written by certbot (below)
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
     ports:
-      # The only public port: http://<VPS IP>/api/v1/...
+      # The only public ports: 80 redirects to 443 (https://api.elbuenclavo.tech/api/v1/...)
       - "80:80"
+      - "443:443"
     depends_on:
       - backend
+
+  # Not started by "up": run by hand or by cron with
+  # docker compose run --rm certbot renew --webroot -w /var/www/certbot -q
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["tools"]
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
 
 volumes:
   db_data:
