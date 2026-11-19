@@ -1,0 +1,194 @@
+<!-- HU-23: what to order, one card (and one printed sheet) per supplier -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cordes-blue': '#1e40af',
+                        'cordes-dark': '#1e293b',
+                        'cordes-light': '#f8fafc',
+                        'cordes-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<div class="order-page min-h-screen bg-gray-100">
+
+  <header class="border-b border-gray-200 bg-white px-4 py-4 md:px-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 md:text-2xl">Lista de pedido</h1>
+        <p class="mt-1 text-sm text-gray-600">
+          Ferretería El Buen Clavo
+          @if (order(); as o) { · {{ date(o.fecha) }} }
+        </p>
+      </div>
+      @if (summary().productos > 0) {
+        <div class="no-print flex gap-2">
+          <button type="button" (click)="copy(allText(), 'all')"
+                  class="whitespace-nowrap rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-blue-800 hover:bg-blue-50">
+            {{ copied() === 'all' ? '¡Copiado!' : 'Copiar todo' }}
+          </button>
+          <button type="button" (click)="print()"
+                  class="whitespace-nowrap rounded-lg bg-blue-800 px-3 py-2 text-sm text-white hover:bg-slate-800">
+            Imprimir
+          </button>
+        </div>
+      }
+    </div>
+  </header>
+
+  <main class="space-y-4 px-4 py-4 md:px-6">
+    @if (loading()) {
+      <p class="py-10 text-center text-gray-500">Armando la lista...</p>
+    } @else if (error()) {
+      <div class="rounded-lg bg-red-100 px-4 py-3 text-red-800">
+        {{ error() }}
+        <button type="button" (click)="load()" class="ml-2 underline">Reintentar</button>
+      </div>
+    } @else if (order()?.proveedores?.length === 0) {
+      <div class="rounded-lg bg-green-100 px-4 py-6 text-center text-green-800">
+        Nada por pedir: ningún producto está en su mínimo.
+      </div>
+    } @else {
+      <!-- Summary: follows the quantities edited below -->
+      <div class="no-print grid grid-cols-3 gap-3">
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs text-gray-500">Productos</p>
+          <p class="text-xl font-bold text-gray-900">{{ summary().productos }}</p>
+        </div>
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs text-gray-500">Proveedores</p>
+          <p class="text-xl font-bold text-gray-900">{{ summary().proveedores }}</p>
+        </div>
+        <div class="rounded-lg bg-white p-3 shadow-sm">
+          <p class="text-xs text-gray-500">Total aprox.</p>
+          <p class="text-xl font-bold text-gray-900">Q{{ summary().total | number: '1.2-2' }}</p>
+        </div>
+      </div>
+      <p class="no-print text-sm text-gray-600">
+        Se sugiere lo necesario para llegar al <strong>doble del mínimo</strong>, en la presentación de la
+        última factura. Puede cambiar las cantidades; con 0 el producto no se pide.
+      </p>
+
+      @for (group of order()!.proveedores; track groupKey(group)) {
+        <section class="order-sheet rounded-lg bg-white shadow-sm">
+          <!-- Supplier -->
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
+            <div class="min-w-0">
+              @if (group.proveedor_id !== null) {
+                <h2 class="font-semibold text-gray-900">
+                  {{ group.nombre }}
+                  @if (group.activo === false) {
+                    <span class="ml-1 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">Inactivo</span>
+                  }
+                </h2>
+                <p class="text-sm text-gray-600">
+                  @if (group.contacto) { {{ group.contacto }} · }
+                  @if (group.telefono) {
+                    <a [href]="'tel:' + group.telefono" class="text-blue-700 underline">{{ group.telefono }}</a>
+                  } @else {
+                    <span class="text-gray-400">Sin teléfono</span>
+                  }
+                </p>
+                @if (group.activo === false) {
+                  <p class="mt-1 text-xs text-yellow-800">Este proveedor está desactivado: quizá convenga pedírselo a otro.</p>
+                }
+              } @else {
+                <h2 class="font-semibold text-gray-900">Sin proveedor</h2>
+                <p class="text-sm text-gray-600">Nunca se compraron con factura: elija a quién pedírselos.</p>
+              }
+            </div>
+            <div class="text-right">
+              <p class="text-xs text-gray-500">Total aprox.</p>
+              <p class="font-bold text-gray-900">Q{{ groupTotal(group) | number: '1.2-2' }}</p>
+              @if (groupWithoutPrice(group) > 0) {
+                <p class="text-xs text-yellow-800">{{ groupWithoutPrice(group) }} sin precio</p>
+              }
+            </div>
+          </div>
+
+          <!-- Products -->
+          <ul class="divide-y divide-gray-100 px-4">
+            @for (line of group.productos; track line.producto_id) {
+              <li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
+                  [class.opacity-50]="amount(line) === 0" [class.no-print]="amount(line) === 0">
+                <div class="min-w-0 flex-1" style="flex-basis: 12rem">
+                  <p class="break-words font-medium text-gray-900">
+                    {{ line.nombre }}
+                    @if (line.agotado) {
+                      <span class="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Agotado</span>
+                    }
+                  </p>
+                  <p class="text-xs text-gray-500">
+                    {{ line.codigo }} · Hay {{ line.existencia | number: '1.0-2' }} {{ unidadLabel[line.unidad_base] }}
+                    · Mínimo {{ line.stock_minimo | number: '1.0-2' }} {{ unidadLabel[line.unidad_base] }}
+                    @if (unitPrice(line) !== null) {
+                      · Q{{ unitPrice(line) | number: '1.2-2' }} c/{{ orderUnit(line, 1) }}
+                    }
+                  </p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <input type="number" min="0" step="1" inputmode="numeric"
+                         [value]="amount(line)" (change)="setAmount(line, $any($event.target).value)"
+                         [attr.aria-label]="'Cantidad a pedir de ' + line.nombre"
+                         class="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-base" />
+                  <span class="text-sm text-gray-700">
+                    {{ orderUnit(line) }}
+                    @if (inBase(line) !== null) {
+                      <span class="block text-xs text-gray-500">= {{ inBase(line) | number: '1.0-2' }} {{ unidadLabel[line.unidad_base] }}</span>
+                    }
+                  </span>
+                </div>
+
+                <div class="w-24 text-right text-sm">
+                  @if (lineCost(line) !== null) {
+                    <span class="font-medium text-gray-900">Q{{ lineCost(line) | number: '1.2-2' }}</span>
+                  } @else {
+                    <span class="text-gray-400">Sin precio</span>
+                  }
+                </div>
+
+                <div class="no-print w-8 text-right">
+                  @if (amount(line) > 0) {
+                    <button type="button" (click)="remove(line)" title="No pedir este producto"
+                            class="text-lg leading-none text-gray-400 hover:text-red-600">×</button>
+                  } @else {
+                    <button type="button" (click)="restore(line)" title="Volver a la cantidad sugerida"
+                            class="text-xs text-blue-700 underline">Sugerido</button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+
+          <!-- Send it -->
+          @if (included(group).length > 0) {
+            <div class="no-print flex flex-wrap gap-2 border-t border-gray-200 px-4 py-3">
+              <button type="button" (click)="copy(groupText(group), groupKey(group))"
+                      class="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-blue-800 hover:bg-blue-50">
+                {{ copied() === groupKey(group) ? '¡Copiado!' : 'Copiar' }}
+              </button>
+              @if (whatsappUrl(group); as url) {
+                <a [href]="url" target="_blank" rel="noopener"
+                   class="rounded-lg bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700">
+                  WhatsApp
+                </a>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  </main>
+</div>

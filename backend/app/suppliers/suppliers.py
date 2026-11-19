@@ -1,4 +1,6 @@
+from datetime import date
 from decimal import Decimal
+import math
 
 from flask import Blueprint, request
 import pymysql
@@ -222,3 +224,91 @@ def get_product_suppliers(product_id):
     for p in proveedores:
         p["mas_barato"] = len(proveedores) > 1 and p["precio"] == cheapest
     return {"status": 0, "message": "SUCCESS: product suppliers", "data": proveedores}, 200
+
+
+def _suggested_order(row):
+    """HU-23 (decided 2026-11-19, option A): order enough to end at TWICE the minimum, so the
+    product does not hit the minimum again next week. 20 minimum, 12 in stock -> 28 (ends at 40).
+
+    If the last invoice came in a presentation, round UP to whole presentations, as that supplier
+    sells it (60 lb with a 50 lb caja -> 2 cajas = 100 lb). Without one, round up to a whole
+    base unit. A minimum of 0 would suggest 0, so at least one presentation / one unit.
+    Returns (base quantity, presentation quantity or None).
+    """
+    falta = 2 * row["stock_minimo"] - row["existencia"]
+    factor = row["factor"]
+    if factor:
+        cantidad = max(math.ceil(falta / factor), 1)
+        return Decimal(cantidad) * factor, cantidad
+    return Decimal(max(math.ceil(falta), 1)), None
+
+
+def _order_line_to_json(row):
+    """One product of the order list. precio is per base unit: the last invoice's price, or
+    products.precio_compra for a product never bought by invoice (HU-31 initial load), or None."""
+    sugerido, en_presentacion = _suggested_order(row)
+    precio = row["precio"] if row["precio"] is not None else row["precio_compra"]
+    factor = row["factor"]
+    return {
+        "producto_id": row["producto_id"],
+        "codigo": row["codigo"],
+        "nombre": row["nombre"],
+        "categoria": row["categoria"],
+        "unidad_base": row["unidad_base"],
+        "existencia": float(row["existencia"]),
+        "stock_minimo": float(row["stock_minimo"]),
+        "agotado": row["existencia"] <= 0,
+        # In the base unit, already rounded to the presentation
+        "sugerido": float(sugerido),
+        # The presentation of the last invoice, with the suggestion counted in it
+        "presentacion": {
+            "nombre": row["presentacion"],
+            "factor": float(factor),
+            "cantidad": en_presentacion,
+        } if factor else None,
+        "precio": float(precio) if precio is not None else None,
+        "precio_presentacion": float((precio * factor).quantize(Decimal("0.01")))
+        if precio is not None and factor else None,
+        "costo": float((sugerido * precio).quantize(Decimal("0.01"))) if precio is not None else None,
+        "ultima_compra": row["fecha_factura"].isoformat() if row["fecha_factura"] else None,
+    }
+
+
+@suppliers.route('api/v1/purchase-order', methods=['GET'])
+@requiere_rol('admin')  # HU-23: the owner orders (and it shows purchase prices, HU-29)
+def get_purchase_order():
+    """HU-23: what to order, grouped by the supplier that brought each product last.
+    The group with proveedor_id None holds the products never bought by invoice."""
+    groups = {}
+    for row in AccessData().get_purchase_order():
+        key = row["proveedor_id"]
+        if key not in groups:
+            groups[key] = {
+                "proveedor_id": key,
+                "nombre": row["proveedor"],
+                "contacto": row["contacto"],
+                "telefono": row["telefono"],
+                "activo": bool(row["proveedor_activo"]) if key is not None else None,
+                "productos": [],
+            }
+        groups[key]["productos"].append(_order_line_to_json(row))
+
+    proveedores = list(groups.values())
+    for group in proveedores:
+        costs = [p["costo"] for p in group["productos"] if p["costo"] is not None]
+        group["total"] = round(sum(costs), 2)
+        group["sin_precio"] = len(group["productos"]) - len(costs)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: purchase order",
+        "data": {
+            "fecha": date.today().isoformat(),
+            "proveedores": proveedores,
+            "resumen": {
+                "productos": sum(len(g["productos"]) for g in proveedores),
+                "proveedores": sum(1 for g in proveedores if g["proveedor_id"] is not None),
+                "total": round(sum(g["total"] for g in proveedores), 2),
+            },
+        },
+    }, 200

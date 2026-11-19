@@ -32,8 +32,8 @@
     </p>
   </header>
 
-  <!-- Filters: stay on top while scrolling (below the phone bar, which is 4rem tall) -->
-  <div class="sticky top-16 z-30 space-y-2 border-b border-gray-200 bg-gray-100 px-4 py-3 md:static md:px-6">
+  <!-- Filters: stay on top while scrolling on a phone -->
+  <div class="sticky top-0 z-30 space-y-2 border-b border-gray-200 bg-gray-100 px-4 py-3 md:static md:px-6">
     <input type="search" placeholder="Buscar por nombre o código..."
            [value]="query()" (input)="query.set($any($event.target).value)"
            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base

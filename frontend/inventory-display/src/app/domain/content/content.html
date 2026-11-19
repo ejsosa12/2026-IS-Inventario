@@ -1,17 +1,28 @@
 @if (isPhone()) {
-  <!-- HU-19: phone view. No sidebar, only Existencias, with a small bar on top -->
+  <!-- HU-19: phone view. No sidebar, only the phone pages, with a small bar on top -->
   <div class="min-h-screen bg-gray-100">
-    <header class="sticky top-0 z-40 flex items-center justify-between bg-blue-800 px-4 py-3 text-white shadow">
-      <div class="min-w-0">
-        <p class="font-bold">Inventario</p>
-        <p class="truncate text-xs text-blue-200">
-          {{ nombre() }} · {{ isAdmin() ? 'Dueño' : 'Empleado' }}
-        </p>
+    <header class="no-print bg-blue-800 text-white shadow">
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="min-w-0">
+          <p class="font-bold">Inventario</p>
+          <p class="truncate text-xs text-blue-200">
+            {{ nombre() }} · {{ isAdmin() ? 'Dueño' : 'Empleado' }}
+          </p>
+        </div>
+        <button type="button" (click)="logout()"
+                class="ml-3 whitespace-nowrap rounded-lg border border-blue-300 px-3 py-1.5 text-sm hover:bg-blue-700">
+          Cerrar sesión
+        </button>
       </div>
-      <button type="button" (click)="logout()"
-              class="ml-3 whitespace-nowrap rounded-lg border border-blue-300 px-3 py-1.5 text-sm hover:bg-blue-700">
-        Cerrar sesión
-      </button>
+      <!-- HU-23: the owner also gets the order list on the phone -->
+      @if (isAdmin()) {
+        <nav class="flex">
+          <a routerLink="/content/stock" routerLinkActive="border-white text-white"
+             class="flex-1 border-b-2 border-blue-800 py-2 text-center text-sm text-blue-200">Existencias</a>
+          <a routerLink="/content/suppliers/order" routerLinkActive="border-white text-white"
+             class="flex-1 border-b-2 border-blue-800 py-2 text-center text-sm text-blue-200">Pedido</a>
+        </nav>
+      }
     </header>
     <main>
       <router-outlet />

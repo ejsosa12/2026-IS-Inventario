@@ -41,6 +41,12 @@
 
                         <!-- HU-29: only the owner adds suppliers -->
                         @if (isAdmin()) {
+                          <!-- HU-23: what to order from each supplier -->
+                          <a routerLink="order"
+                             class="px-4 py-2 whitespace-nowrap bg-white text-blue-800 border border-blue-300 rounded-lg
+                                    hover:bg-blue-50 transition-colors">
+                            Lista de pedido
+                          </a>
                           <a routerLink="add-supplier"
                              class="px-4 py-2 whitespace-nowrap bg-blue-800 text-white rounded-lg
                                     hover:bg-slate-800 transition-colors">
