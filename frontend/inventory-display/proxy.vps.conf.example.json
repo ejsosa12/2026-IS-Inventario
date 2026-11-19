@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "http://IP_VPS",
+    "secure": false,
+    "changeOrigin": true
+  }
+}
