@@ -11,7 +11,13 @@ import {
   ProductDetail,
   ProductListItem,
 } from '../../models/product';
-import { NewSupplier, Supplier, SupplierProducts, SupplierPurchase } from '../../models/supplier';
+import {
+  NewSupplier,
+  PurchaseOrder,
+  Supplier,
+  SupplierProducts,
+  SupplierPurchase,
+} from '../../models/supplier';
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { InitialLoadResult } from '../../models/initial-load';
@@ -320,6 +326,13 @@ export class DataServices {
     return this.http
       .get<ApiResponse<SupplierPurchase[]>>(`${this.API_URL}/products/${id}/suppliers`)
       .pipe(map((response) => response.data as SupplierPurchase[]));
+  }
+
+  // HU-23 (owner only): low-stock products grouped by the supplier that brought them last
+  getPurchaseOrder() {
+    return this.http
+      .get<ApiResponse<PurchaseOrder>>(`${this.API_URL}/purchase-order`)
+      .pipe(map((response) => response.data as PurchaseOrder));
   }
 
   // HU-27 (owner only): every movement, filtered by date, type and user, one page at a time

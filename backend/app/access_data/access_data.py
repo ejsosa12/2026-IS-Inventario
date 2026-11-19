@@ -1412,6 +1412,51 @@ class AccessData:
                 cursor.execute(query, {"id": product_id})
                 return cursor.fetchall()
 
+    def get_purchase_order(self):
+        """HU-23: the low-stock products (same rule as HU-22) with the supplier of their LAST
+        valid invoice (any supplier; voided invoices do not count), its price per base unit and
+        the presentation it came in. Products never bought have NULL supplier and price.
+        Grouped by supplier name (no supplier last), then product name.
+        """
+        query = f"""
+            WITH bajos AS (
+                SELECT * FROM (
+                    SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.stock_minimo,
+                           p.precio_compra, c.nombre AS categoria,
+                           COALESCE(SUM({STOCK_CHANGE}), 0) AS existencia
+                    FROM products p
+                    LEFT JOIN categories c ON c.id = p.categoria_id
+                    LEFT JOIN movements m ON m.producto_id = p.id
+                    WHERE p.activo = true AND p.stock_minimo IS NOT NULL
+                    GROUP BY p.id, c.nombre
+                ) s
+                WHERE s.existencia <= s.stock_minimo
+            ),
+            ultima AS (
+                SELECT m.producto_id, m.proveedor_id, m.precio, m.presentacion_id, e.fecha_factura,
+                       ROW_NUMBER() OVER (PARTITION BY m.producto_id
+                                          ORDER BY e.fecha_factura DESC, e.id DESC, m.id DESC) AS n
+                FROM movements m
+                JOIN entries e ON e.id = m.entrada_id
+                WHERE m.tipo = 'entrada' AND e.anulada_en IS NULL
+                  AND m.producto_id IN (SELECT id FROM bajos)
+            )
+            SELECT b.id AS producto_id, b.codigo, b.nombre, b.unidad_base, b.stock_minimo,
+                   b.existencia, b.categoria, b.precio_compra,
+                   u.proveedor_id, s.nombre AS proveedor, s.contacto, s.telefono,
+                   s.activo AS proveedor_activo,
+                   u.precio, u.fecha_factura, pr.nombre AS presentacion, pr.factor
+            FROM bajos b
+            LEFT JOIN ultima u ON u.producto_id = b.id AND u.n = 1
+            LEFT JOIN suppliers s ON s.id = u.proveedor_id
+            LEFT JOIN presentations pr ON pr.id = u.presentacion_id
+            ORDER BY s.nombre IS NULL, s.nombre, u.proveedor_id, b.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
     def get_supplier_invoice_summary(self, supplier_id):
         """HU-10: how many valid invoices a supplier has and the date of the last one."""
         query = """

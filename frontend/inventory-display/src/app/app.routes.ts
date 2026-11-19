@@ -59,6 +59,10 @@ export const routes: Routes = [
       },
       {
         // HU-10: what a supplier brings and at what price. Owner only
+        // HU-23: what to order, by supplier (owner only: purchase prices). Also on the phone view
+        path: 'suppliers/order', canActivate: [adminGuard], loadComponent: () => import('./utils/purchase-order/purchase-order').then(p => p.PurchaseOrderPage)
+      },
+      {
         path: 'suppliers/products/:id', canActivate: [adminGuard], loadComponent: () => import('./utils/supplier-products/supplier-products').then(s => s.SupplierProducts)
       },
       {

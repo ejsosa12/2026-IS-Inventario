@@ -1,0 +1,28 @@
+/* HU-23: printing. Global on purpose (ViewEncapsulation.None): it hides the sidebar and the
+   phone bar, which are outside this component. Angular removes it when the page is left. */
+@media print {
+  app-side-bar,
+  .no-print {
+    display: none !important;
+  }
+
+  /* The content leaves room for the sidebar (ml-64); on paper it starts at the edge */
+  main {
+    margin-left: 0 !important;
+  }
+
+  .order-page {
+    background: white !important;
+  }
+
+  /* One supplier per sheet */
+  .order-sheet {
+    break-after: page;
+    box-shadow: none !important;
+    border: 1px solid #d1d5db;
+  }
+
+  .order-sheet:last-child {
+    break-after: auto;
+  }
+}

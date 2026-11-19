@@ -52,3 +52,40 @@ export interface SupplierProducts {
   };
   productos: SupplierPurchase[];
 }
+
+// HU-23: GET /api/v1/purchase-order (owner only). One line = one low-stock product
+export interface PurchaseOrderLine {
+  producto_id: number;
+  codigo: string;
+  nombre: string;
+  categoria: string | null;
+  unidad_base: UnidadBase;
+  existencia: number;
+  stock_minimo: number;
+  agotado: boolean;
+  sugerido: number; // base unit, already rounded to the presentation (ends at 2 × mínimo)
+  // How the last invoice brought it; cantidad = the suggestion counted in it
+  presentacion: { nombre: string; factor: number; cantidad: number } | null;
+  precio: number | null; // per base unit: last invoice, or precio_compra, or null
+  precio_presentacion: number | null;
+  costo: number | null; // sugerido × precio
+  ultima_compra: string | null; // YYYY-MM-DD
+}
+
+// proveedor_id null = products never bought by invoice ("Sin proveedor")
+export interface PurchaseOrderGroup {
+  proveedor_id: number | null;
+  nombre: string | null;
+  contacto: string | null;
+  telefono: string | null;
+  activo: boolean | null;
+  productos: PurchaseOrderLine[];
+  total: number;
+  sin_precio: number;
+}
+
+export interface PurchaseOrder {
+  fecha: string; // YYYY-MM-DD
+  proveedores: PurchaseOrderGroup[];
+  resumen: { productos: number; proveedores: number; total: number };
+}
