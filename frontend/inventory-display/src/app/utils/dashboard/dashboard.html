@@ -205,7 +205,7 @@
                         </div>
                     </div>
                     @if (salesDays(); as days) {
-                        <app-sales-chart [days]="days" />
+                        <app-sales-chart [days]="days" [linkable]="isAdmin()" />
                         <!-- The full report (Análisis) is owner only -->
                         @if (isAdmin()) {
                             <a routerLink="/content/reports/top-sales" class="inline-block mt-3 text-sm text-blue-800 hover:underline">

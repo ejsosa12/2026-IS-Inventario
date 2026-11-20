@@ -8,7 +8,7 @@
     } @else {
       {{ totals().ventas }} {{ totals().ventas === 1 ? 'venta' : 'ventas' }} ·
       Q{{ totals().total | number: '1.2-2' }} en total
-      <span class="text-gray-400">· pase el cursor sobre una barra</span>
+      <span class="text-gray-400">· pase el cursor sobre una barra{{ linkable() ? ', o haga clic para ver ese día' : '' }}</span>
     }
   </p>
 
@@ -26,16 +26,22 @@
       <div class="absolute left-0 right-0 top-1/2 border-t border-dashed border-gray-200"></div>
 
       <div class="absolute inset-0 flex items-end gap-px px-1">
+        <!-- With linkable (owner only: Análisis is adminGuard), a bar opens "Más vendidos" with
+             Desde and Hasta set to that day. routerLink null = a plain, focusable bar -->
         @for (d of days(); track d.fecha) {
-          <div class="flex-1 h-full flex items-end cursor-default outline-none" tabindex="0"
-               [attr.aria-label]="long(d.fecha) + ': Q' + (d.total | number: '1.2-2')"
-               (mouseenter)="hovered.set(d)" (mouseleave)="hovered.set(null)"
-               (focus)="hovered.set(d)" (blur)="hovered.set(null)">
+          <a class="flex-1 h-full flex items-end outline-none"
+             [class]="linkable() ? 'cursor-pointer' : 'cursor-default'"
+             [routerLink]="linkable() ? '/content/reports/top-sales' : null"
+             [queryParams]="{ desde: d.fecha, hasta: d.fecha }"
+             [attr.tabindex]="linkable() ? null : 0"
+             [attr.aria-label]="(linkable() ? 'Ver lo vendido el ' : '') + long(d.fecha) + ': Q' + (d.total | number: '1.2-2')"
+             (mouseenter)="hovered.set(d)" (mouseleave)="hovered.set(null)"
+             (focus)="hovered.set(d)" (blur)="hovered.set(null)">
             <div class="w-full rounded-t transition-colors"
                  [class]="hovered() === d ? 'bg-blue-800' : 'bg-blue-500'"
                  [style.height.%]="height(d)"
                  [style.min-height.px]="d.total > 0 ? 2 : 0"></div>
-          </div>
+          </a>
         }
       </div>
 

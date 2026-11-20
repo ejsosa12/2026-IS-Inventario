@@ -1,5 +1,6 @@
 import { Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { SalesDay } from '../../models/report';
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -7,13 +8,17 @@ const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 // HU-24: money sold per day as bars. Plain HTML/CSS (no chart library). Used by the
 // dashboard (last days) and by the "Más vendidos" tab of Análisis.
 @Component({
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, RouterLink],
   selector: 'app-sales-chart',
   templateUrl: './sales-chart.html',
 })
 export class SalesChart {
   // Every day of the range, oldest first (Flask fills the days without sales with 0)
   readonly days = input.required<SalesDay[]>();
+
+  // true = each bar links to "Más vendidos" with that day as Desde and Hasta. Only for the
+  // owner: employees see the chart on the dashboard but not Análisis
+  readonly linkable = input(false);
 
   // The bar under the cursor (or focused with the keyboard)
   hovered = signal<SalesDay | null>(null);

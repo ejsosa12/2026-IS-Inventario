@@ -93,7 +93,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 class="text-lg font-semibold text-gray-900">Ventas por día</h3>
           <p class="text-sm text-gray-600 mb-2">Del {{ shortDate(r.desde) }} al {{ shortDate(r.hasta) }}</p>
-          <app-sales-chart [days]="r.por_dia" />
+          <app-sales-chart [days]="r.por_dia" [linkable]="true" />
         </div>
       }
 
