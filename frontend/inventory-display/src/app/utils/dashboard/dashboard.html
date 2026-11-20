@@ -108,36 +108,43 @@
                                   —
                             }
                             </p>
-                            <div class="flex items-center mt-2">
-                                <span class="text-green-600 text-sm font-medium flex items-center">
-                                    <i class="fas fa-arrow-up mr-1"></i>
-                                    12%
-                                </span>
-                                <span class="text-gray-500 text-sm ml-2">vs last month</span>
-                            </div>
+                            <!-- What the number means: no history of the money in the store, so no comparison -->
+                            <p class="text-gray-500 text-sm mt-2">A precio de compra</p>
+                            @if (productCounts(); as c) {
+                                <p class="text-gray-500 text-sm mt-1">en {{ plural(c.existencia, 'producto', 'productos') }}</p>
+                            }
                         </div>
                         <div class="w-12 h-12 bg-cordes-blue bg-opacity-10 rounded-lg flex items-center justify-center">
-                            <i class="fa-solid fa-q text-cordes-blue text-xl"></i>
+                            <i class="fa-regular fa-q text-cordes-blue text-xl"></i>
                         </div>
                     </div>
                 </div>
 
-                <!-- Users Card -->
+                <!-- Sold today -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600">Total Users</p>
-                            <p class="text-3xl font-bold text-gray-900 mt-2">15,847</p>
-                            <div class="flex items-center mt-2">
-                                <span class="text-green-600 text-sm font-medium flex items-center">
-                                    <i class="fas fa-arrow-up mr-1"></i>
-                                    8%
-                                </span>
-                                <span class="text-gray-500 text-sm ml-2">vs last month</span>
-                            </div>
+                            <!-- HU-15: money sold today vs yesterday (the last two days of the chart's por_dia) -->
+                            <p class="text-sm font-medium text-gray-600">Vendido hoy</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2">
+                                @if (todaySales(); as t) { Q{{ t.today.total | number: '1.2-2' }} } @else { — }
+                            </p>
+                            @if (todaySales(); as t) {
+                                <p class="text-gray-500 text-sm mt-2">{{ plural(t.today.ventas, 'venta', 'ventas') }}</p>
+                                <div class="flex items-center mt-1" [title]="'Ayer: Q' + (t.yesterday.total | number: '1.2-2') + ' en ' + plural(t.yesterday.ventas, 'venta', 'ventas')">
+                                    @if (t.change !== null) {
+                                        <span class="text-sm font-medium" [class]="t.change >= 0 ? 'text-green-600' : 'text-red-600'">
+                                            {{ t.change > 0 ? '+' : '' }}{{ t.change }} %
+                                        </span>
+                                        <span class="text-gray-500 text-sm ml-2">vs ayer</span>
+                                    } @else {
+                                        <span class="text-gray-500 text-sm">Ayer no hubo ventas</span>
+                                    }
+                                </div>
+                            }
                         </div>
                         <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-users text-green-600 text-xl"></i>
+                            <i class="fas fa-cash-register text-green-600 text-xl"></i>
                         </div>
                     </div>
                 </div>
@@ -166,7 +173,7 @@
                             }
                         </div>
                         <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-shopping-cart text-orange-600 text-xl"></i>
+                            <i class="fa-solid fa-coins text-orange-600 text-xl"></i>
                         </div>
                     </div>
                 </div>

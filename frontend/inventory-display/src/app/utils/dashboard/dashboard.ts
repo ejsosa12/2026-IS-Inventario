@@ -127,6 +127,18 @@ export class Dashboard {
     return Math.round(((m.ventas - m.ventas_anterior) / m.ventas_anterior) * 100);
   });
 
+  // Card "Vendido hoy": the last day of the chart is today and the one before is yesterday
+  // (por_dia always ends today and has every day). change in %, null when yesterday sold 0
+  todaySales = computed(() => {
+    const days = this.salesDays();
+    if (!days || days.length < 2) return null;
+    const today = days[days.length - 1];
+    const yesterday = days[days.length - 2];
+    const change =
+      yesterday.total > 0 ? Math.round(((today.total - yesterday.total) / yesterday.total) * 100) : null;
+    return { today, yesterday, change };
+  });
+
   // "Pendientes": what someone has to sort out (null = loading)
   pending = signal<DashboardPending | null>(null);
   nothingPending = computed(() => {

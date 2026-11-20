@@ -15,9 +15,9 @@
       <nav class="mt-4 flex gap-6 text-sm">
         <a routerLink="/content/reports" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">Valor del inventario</a>
         <a routerLink="/content/reports/movements" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">Movimientos</a>
-        <a routerLink="/content/reports/top-sales" class="pb-3 border-b-2 border-blue-800 text-blue-800 font-medium">Más vendidos</a>
+        <a routerLink="/content/reports/top-sales" class="pb-3 border-b-2 border-blue-800 text-blue-800 font-medium">Ventas</a>
         <!-- HU-25 -->
-        <a routerLink="/content/reports/stale" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">No se mueve</a>
+        <a routerLink="/content/reports/stale" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">Sin Movimientos</a>
       </nav>
     </div>
   </header>
@@ -93,7 +93,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 class="text-lg font-semibold text-gray-900">Ventas por día</h3>
           <p class="text-sm text-gray-600 mb-2">Del {{ shortDate(r.desde) }} al {{ shortDate(r.hasta) }}</p>
-          <app-sales-chart [days]="r.por_dia" [linkable]="true" />
+          <app-sales-chart [days]="r.por_dia" />
         </div>
       }
 
