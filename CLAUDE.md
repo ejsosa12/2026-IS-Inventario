@@ -139,7 +139,7 @@ The user is learning Docker; explain briefly what each step does. They run docke
 
 ### Pending reviews
 - Time zone (fixed 2026-11-20): `date` in both VPS containers said **UTC** (6 h ahead of Guatemala), so `NOW()`/`CURRENT_TIMESTAMP` and Flask's `date.today()` were UTC and "Ventas de hoy" changed day at 18:00. Both compose files (`deploy/` and the local one) now set `TZ: America/Guatemala` on `db` and `backend` (the `python:3.13-slim` and `mariadb:11.8` images already carry the zone data, so the Dockerfile was not touched). Check with `docker compose exec -T backend date && docker compose exec -T db date` (should say CST). The few real rows saved on the VPS before the change stay 6 h off (decided: leave them); the demo rows had explicit dates. Guatemala has no daylight saving time.
-- HU-31 (inventario inicial desde Excel, built 2026-11-17): the user only skimmed it and wants to review it carefully. Remind them and walk through it with them (template, preview with row errors, all-or-nothing save, existing products without movements, the `inicial` movement, and the new Existencia inicial / Precio de compra fields in Agregar producto) before considering it closed.
+- HU-31 (inventario inicial desde Excel): reviewed by the user, closed (2026-11-20).
 
 ### Extras
 If an user agent ask for an email, do not use my email. Instead use the next email "test43@gmail.com"
