@@ -93,6 +93,11 @@ export class Dashboard {
     this.dismissed.set(true);
   }
 
+  // "Ver" of the notification: scrolls down to the "Productos a agotarse" list
+  showLowStockList() {
+    document.getElementById('low-stock-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // HU-26 money in the store and HU-24 sales chart. Every user sees them here (decided
   // 2026-11-20); the full reports (Análisis) stay owner only. null = loading
   isAdmin = inject(AuthService).isAdmin;

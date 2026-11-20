@@ -54,6 +54,14 @@ export class Entries {
     return id === null ? null : Number(id);
   })();
 
+  // "Agregar" on the dashboard's "Productos a agotarse" opens entries?producto=<id>: that product
+  // starts chosen in the line form. Only for a new entry, once products and presentations arrive
+  private readonly preselectId: number | null = (() => {
+    const id = Number(inject(ActivatedRoute).snapshot.queryParamMap.get('producto'));
+    return this.correctId === null && id > 0 ? id : null;
+  })();
+  private pendingLoads = 2;
+
   // HU-14: the entry being corrected, and why (required to save the correction)
   original = signal<Entry | null>(null);
   motivo = this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(200)]);
@@ -118,11 +126,17 @@ export class Entries {
       error: () => this.error.set('No se pudieron cargar los proveedores'),
     });
     this.dataServices.getProducts().subscribe({
-      next: (products) => this.products.set(products),
+      next: (products) => {
+        this.products.set(products);
+        this.preselectWhenLoaded();
+      },
       error: () => this.error.set('No se pudieron cargar los productos'),
     });
     this.dataServices.getPresentations().subscribe({
-      next: (presentations) => this.presentations.set(presentations),
+      next: (presentations) => {
+        this.presentations.set(presentations);
+        this.preselectWhenLoaded();
+      },
       error: () => this.error.set('No se pudieron cargar las presentaciones'),
     });
 
@@ -135,6 +149,18 @@ export class Entries {
       const options = this.unitOptions(productId);
       this.lineForm.controls.presentacion_id.setValue(options[0]?.presentacion_id ?? null);
     });
+  }
+
+  // Waits for products and presentations (the "Viene en" suggestion needs both), then picks the
+  // product from the URL and puts the cursor in "Recibido". An inactive or unknown id is ignored
+  private preselectWhenLoaded() {
+    if (--this.pendingLoads > 0 || this.preselectId === null) {
+      return;
+    }
+    if (this.productOptions().some((product) => product.id === this.preselectId)) {
+      this.lineForm.controls.producto_id.setValue(this.preselectId);
+      setTimeout(() => document.getElementById('cantidad')?.focus());
+    }
   }
 
   // HU-14: fills the header and the lines with the entry, as it came on the invoice

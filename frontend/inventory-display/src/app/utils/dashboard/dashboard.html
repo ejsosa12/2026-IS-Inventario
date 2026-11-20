@@ -65,12 +65,11 @@
                                 }
                             </p>
                         </div>
-                        <a routerLink="/content/entries"
-                           class="px-4 py-2 text-sm whitespace-nowrap bg-white border border-current rounded-lg hover:bg-gray-50 transition-colors">
-
+                        <!-- Moves down to the "Productos a agotarse" list of this same page -->
+                        <button type="button" (click)="showLowStockList()"
+                                class="px-4 py-2 text-sm whitespace-nowrap bg-white border border-current rounded-lg hover:bg-gray-50 transition-colors">
                           Ver
-                        </a>
-                          <!--Make the user move to the list of minimum stock -->
+                        </button>
                         <button type="button" (click)="dismiss()" title="Cerrar" aria-label="Cerrar"
                                 class="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full opacity-70 hover:opacity-100 hover:bg-white transition">
                             <i class="fas fa-times"></i>
@@ -511,7 +510,8 @@
             </div>
             <!-- HU-22: list of minimum stock and out of stock. Out of stock first, then furthest from the minimum -->
             @if (lowStock().length) {
-                <div class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <!-- scroll-mt-6: leaves some space above when "Ver" scrolls here -->
+                <div id="low-stock-list" class="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6 scroll-mt-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-semibold text-gray-900">Productos a agotarse</h3>
                         <!-- HU-05: filter by category -->
@@ -565,6 +565,7 @@
                                             Estado <i [class]="sortIcon('estado')"></i>
                                         </button>
                                     </th>
+                                    <th class="px-6 py-3"><span class="sr-only">Acciones</span></th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -595,6 +596,13 @@
                                             } @else {
                                                 <span class="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Por acabarse</span>
                                             }
+                                        </td>
+                                        <!-- Opens "Entradas de mercadería" with this product already chosen -->
+                                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                                            <a routerLink="/content/entries" [queryParams]="{ producto: item.id }"
+                                               class="inline-flex items-center gap-1 px-3 py-1 text-sm text-blue-800 border border-blue-800 rounded-lg hover:bg-blue-50 transition-colors">
+                                                <i class="fas fa-plus"></i> Agregar
+                                            </a>
                                         </td>
                                     </tr>
                                 }
