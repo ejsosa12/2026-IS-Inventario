@@ -32,6 +32,10 @@ export class Products {
   error = signal<string | null>(null);
   query = signal('');
 
+  // HU-04: the row being (de)activated and the error of that action
+  busyId = signal<number | null>(null);
+  actionError = signal<string | null>(null);
+
   // HU-05: filter by category ('' = all). The options are the categories that have products
   category = signal('');
   categories = computed(() =>
@@ -84,6 +88,44 @@ export class Products {
       error: () => {
         this.error.set('No se pudieron cargar los productos');
         this.loading.set(false);
+      },
+    });
+  }
+
+  // HU-04: soft delete. It may still have stock (decided 2026-11-20, option A), so warn about it
+  toggleActive(product: ProductListItem) {
+    const activo = !product.activo;
+    if (!activo) {
+      let message =
+        `¿Desactivar ${product.nombre}?\n\n` +
+        'Ya no aparecerá en búsquedas, entradas, salidas ni ventas. Su historial se conserva ' +
+        'y se puede volver a activar.';
+      if (product.existencia > 0) {
+        const cantidad = Number(product.existencia.toFixed(product.unidad_base === 'unidad' ? 0 : 2));
+        message +=
+          `\n\nTodavía hay ${cantidad} ${this.unidadLabel[product.unidad_base]} en existencia; ` +
+          'ya no se podrán vender ni sacar mientras esté inactivo.';
+      }
+      if (!confirm(message)) {
+        return;
+      }
+    }
+    this.actionError.set(null);
+    this.busyId.set(product.id);
+    this.dataServices.setProductStatus(product.id, activo).subscribe({
+      next: (updated) => {
+        this.products.update((list) =>
+          list.map((p) => (p.id === updated.id ? { ...p, activo: updated.activo } : p)),
+        );
+        this.busyId.set(null);
+      },
+      error: (err) => {
+        this.actionError.set(
+          err.status === 403
+            ? 'Solo el dueño puede desactivar productos'
+            : 'No se pudo cambiar el estado del producto',
+        );
+        this.busyId.set(null);
       },
     });
   }

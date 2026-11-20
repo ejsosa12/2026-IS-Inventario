@@ -246,6 +246,14 @@ class AccessData:
                 cursor.execute(query, {"id": category_id, "activo": activo})
             conn.commit()
 
+    def set_product_active(self, product_id, activo):
+        """HU-04: desactiva (o reactiva) un producto. Sus movimientos no cambian."""
+        query = "UPDATE products SET activo = %(activo)s WHERE id = %(id)s"
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"id": product_id, "activo": activo})
+            conn.commit()
+
     def get_presentations(self):
         """Devuelve todas las presentaciones (HU-06: 1 caja = 50 lb)."""
         query = """

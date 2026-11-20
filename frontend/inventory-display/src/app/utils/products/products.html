@@ -97,6 +97,10 @@
                     <div class="flex-1 min-h-0">
                       <!-- product list here! -->
                       <div class="h-full overflow-auto border border-gray-200 rounded-lg">
+                        <!-- HU-04 -->
+                        @if (actionError()) {
+                          <p class="m-4 px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ actionError() }}</p>
+                        }
                         @if (loading()) {
                           <p class="p-6 text-sm text-gray-500">Cargando productos...</p>
                         } @else if (error()) {
@@ -223,6 +227,16 @@
                                            class="inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-blue-300 text-blue-800 rounded-lg hover:bg-blue-50 transition-colors">
                                           <i class="fas fa-history"></i>
                                         </a>
+                                        <!-- HU-04: soft delete / reactivate -->
+                                        <button type="button" (click)="toggleActive(product)"
+                                                [disabled]="busyId() === product.id"
+                                                [title]="product.activo ? 'Desactivar' : 'Reactivar'"
+                                                [attr.aria-label]="(product.activo ? 'Desactivar ' : 'Reactivar ') + product.nombre"
+                                                [class]="product.activo
+                                                  ? 'inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50'
+                                                  : 'inline-flex items-center justify-center gap-1 px-3 py-1 text-sm border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50'">
+                                          <i [class]="product.activo ? 'fas fa-ban' : 'fas fa-undo'"></i>
+                                        </button>
                                       }
                                     </div>
                                   </td>

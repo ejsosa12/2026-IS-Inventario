@@ -75,6 +75,15 @@ export class DataServices {
       .pipe(map((response) => response.data as Category));
   }
 
+  // HU-04: deactivate (or reactivate) a product; its movements are kept
+  setProductStatus(id: number, activo: boolean) {
+    return this.http
+      .put<ApiResponse<{ id: number; activo: boolean }>>(`${this.API_URL}/product-status/${id}`, {
+        activo,
+      })
+      .pipe(map((response) => response.data as { id: number; activo: boolean }));
+  }
+
   addProduct(product: NewProduct) {
     return this.http
       .post<ApiResponse<Product>>(`${this.API_URL}/add-product`, product)

@@ -409,6 +409,30 @@ def edit_product(product_id):
     }, 200
 
 
+@catalog.route('api/v1/product-status/<int:product_id>', methods=['PUT'])
+@requiere_rol('admin')  # HU-04: only the owner deactivates products
+def set_product_status(product_id):
+    body = request.get_json(silent=True)
+    activo = body.get("activo") if isinstance(body, dict) else None
+    if not isinstance(activo, bool):
+        return _error("activo must be true or false")
+
+    access = AccessData()
+    if access.get_product_by_id(product_id) is None:
+        return _error("product does not exist", 404)
+
+    # HU-04: soft delete. Its movements stay, so the kárdex and reports keep it.
+    # It may still have stock (decided 2026-11-20, option A): that stock counts in HU-26
+    # and in physical counts, but it cannot be sold or taken out until it is reactivated.
+    access.set_product_active(product_id, activo)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: product " + ("activated" if activo else "deactivated"),
+        "data": {"id": product_id, "activo": activo},
+    }, 200
+
+
 @catalog.route('api/v1/products', methods=['GET'])
 @requiere_rol()  # any logged-in user (HU-19: employees also check stock)
 def get_products():
