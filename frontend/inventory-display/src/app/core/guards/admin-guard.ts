@@ -1,8 +1,9 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, RedirectCommand, Router } from '@angular/router';
 import { AuthService } from '../services/auth-service';
 
-// HU-29: owner-only pages (prices, users...). An employee who types the URL goes back to the dashboard.
+// HU-29: owner-only pages (prices, users...). An employee who types the URL sees the 404 page,
+// as if the page did not exist; skipLocationChange keeps the typed address in the bar.
 // Flask still answers 403, this only keeps the employee from seeing a form they cannot save
 export const adminGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
@@ -11,5 +12,5 @@ export const adminGuard: CanActivateFn = () => {
   if (authService.isAdmin()) {
     return true;
   }
-  return router.createUrlTree(['/content/dashboard']);
+  return new RedirectCommand(router.parseUrl('/not-found'), { skipLocationChange: true });
 };

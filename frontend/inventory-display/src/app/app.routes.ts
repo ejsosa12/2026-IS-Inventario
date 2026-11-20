@@ -152,6 +152,9 @@ export const routes: Routes = [
     loadComponent: () => import('./utils/count-sheet/count-sheet').then(c => c.CountSheet)
   },
 
+  // The 404 page; adminGuard also sends employees here (without changing the address)
+  {path: 'not-found', loadComponent: () => import('./utils/page-not-found/page-not-found').then((p) => p.PageNotFound)},
+
     // Redirects user in case route es empty
   {path: '', redirectTo : '/home', pathMatch: 'full'},
 

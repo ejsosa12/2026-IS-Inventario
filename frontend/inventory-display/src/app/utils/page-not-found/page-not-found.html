@@ -1,1 +1,33 @@
-<p>page-not-found works!</p>
+<head>
+  <!-- Font Awesome only loads on pages whose template links it -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<!-- Same look as the login: grey background and a centered white card -->
+<div class="bg-gray-100 flex items-center justify-center min-h-screen px-4">
+  <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md text-center animate-fade-in">
+    <div class="mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full bg-blue-100">
+      <i class="fas fa-cube text-2xl text-blue-500" aria-hidden="true"></i>
+    </div>
+
+    <p class="text-6xl font-bold text-blue-500 leading-none">404</p>
+    <h1 class="text-2xl font-bold text-gray-800 mt-3 mb-2">Página no encontrada</h1>
+    <p class="text-gray-400 text-xs mb-6 break-all"></p>
+
+    <div class="flex flex-col sm:flex-row gap-3">
+      <button
+        type="button"
+        (click)="back()"
+        class="flex-1 border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+      >
+        <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i> Regresar
+      </button>
+      <a
+        routerLink="/content/dashboard"
+        class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+      >
+        <i class="mr-1" aria-hidden="true"></i> Ir al inicio
+      </a>
+    </div>
+  </div>
+</div>
