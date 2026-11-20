@@ -237,6 +237,13 @@
                         @if (m.proveedor) { · {{ m.proveedor }} }
                       </p>
                     }
+                    @if (m.venta_id) {
+                      <!-- HU-15: the ticket of this sale -->
+                      <p>
+                        <a [routerLink]="['/print/sale', m.venta_id]" target="_blank"
+                           class="text-blue-700 hover:underline">Venta #{{ m.venta_id }}</a>
+                      </p>
+                    }
                     @if (m.conteo_id) {
                       <!-- HU-34: the adjustment came from this physical count -->
                       <p>

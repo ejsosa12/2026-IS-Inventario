@@ -1,1 +1,244 @@
-<p>sales works!</p>
+<!-- HU-15: the counter. Keyboard first: Enter adds, Enter goes back, Ctrl+Enter registers -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cordes-blue': '#1e40af',
+                        'cordes-dark': '#1e293b',
+                        'cordes-light': '#f8fafc',
+                        'cordes-accent': '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<div class="min-h-screen bg-gray-100">
+
+  <header class="border-b border-gray-200 bg-white px-6 py-4">
+    <h1 class="text-2xl font-semibold text-gray-900">Vender</h1>
+    <p class="mt-1 text-sm text-gray-600">
+      Busque el producto, Enter para agregarlo, escriba la cantidad, Enter para el siguiente.
+      <strong>Ctrl+Enter</strong> registra la venta.
+    </p>
+  </header>
+
+  <main class="space-y-6 p-6">
+
+    <!-- Last sale saved -->
+    @if (lastSale(); as sale) {
+      <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-300 bg-green-100 px-4 py-3 text-green-900">
+        <p>
+          <strong>Venta No. {{ saleNumber(sale.id) }} registrada</strong> ·
+          Q{{ sale.total | number: '1.2-2' }} · {{ sale.nombre_cliente }}
+        </p>
+        <div class="flex gap-2">
+          <button id="print-ticket" type="button" (click)="openTicket(sale.id)"
+                  class="rounded-lg bg-green-700 px-4 py-2 text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500">
+            Imprimir ticket
+          </button>
+          <button type="button" (click)="newSale()"
+                  class="rounded-lg border border-green-600 bg-white px-4 py-2 text-green-800 hover:bg-green-50">
+            Nueva venta
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (error()) {
+      <div class="rounded-lg border border-red-300 bg-red-100 px-4 py-3 text-red-800">{{ error() }}</div>
+    }
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+
+      <!-- Products -->
+      <section class="space-y-4 lg:col-span-2">
+        <div class="relative">
+          <input id="sale-search" type="search" autofocus autocomplete="off"
+                 placeholder="Buscar producto por nombre o código..."
+                 [value]="query()" (input)="query.set($any($event.target).value)"
+                 (keydown.enter)="addFirst($event)" (keydown.escape)="query.set('')"
+                 [disabled]="loadingProducts()"
+                 class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-lg focus:border-blue-500 focus:outline-none" />
+
+          @if (results().length > 0) {
+            <ul class="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+              @for (product of results(); track product.id; let first = $first) {
+                <li>
+                  <button type="button" (click)="add(product)"
+                          class="flex w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-blue-50"
+                          [class.bg-blue-50]="first">
+                    <span class="min-w-0">
+                      <span class="block truncate font-medium text-gray-900">{{ product.nombre }}</span>
+                      <span class="text-xs text-gray-500">{{ product.codigo }}</span>
+                    </span>
+                    <span class="whitespace-nowrap text-right text-sm">
+                      <span class="block font-semibold text-gray-900">
+                        Q{{ product.precio | number: '1.2-2' }} / {{ unidadLabel[product.unidad_base] }}
+                      </span>
+                      <span [class]="product.existencia > 0 ? 'text-gray-500' : 'text-red-600'">
+                        Hay {{ product.existencia | number: '1.0-3' }} {{ unidadLabel[product.unidad_base] }}
+                        {{ pres(product.id, product.existencia) }}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else if (query().trim()) {
+            <p class="mt-1 text-sm text-gray-500">Ningún producto activo coincide.</p>
+          }
+        </div>
+
+        <div class="overflow-hidden rounded-lg bg-white shadow-sm">
+          <table class="w-full">
+            <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <tr>
+                <th class="px-4 py-2">Producto</th>
+                <th class="px-4 py-2 text-right">Precio</th>
+                <th class="px-4 py-2">Cantidad</th>
+                <th class="px-4 py-2 text-right">Subtotal</th>
+                <th class="px-2 py-2"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              @for (line of lines(); track line.product.id) {
+                <tr>
+                  <td class="px-4 py-2">
+                    <p class="font-medium text-gray-900">{{ line.product.nombre }}</p>
+                    <p class="text-xs text-gray-500">
+                      {{ line.product.codigo }} · hay {{ line.product.existencia | number: '1.0-3' }}
+                      {{ unidadLabel[line.product.unidad_base] }}
+                    </p>
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-2 text-right text-gray-700">
+                    Q{{ line.product.precio | number: '1.2-2' }}
+                  </td>
+                  <td class="px-4 py-2">
+                    <div class="flex items-center gap-2">
+                      <input [id]="'qty-' + line.product.id" type="text" inputmode="decimal"
+                             [value]="line.cantidad" (input)="setQuantity(line, $any($event.target).value)"
+                             (keydown.enter)="backToSearch($event)"
+                             [attr.aria-label]="'Cantidad de ' + line.product.nombre"
+                             class="w-24 rounded-lg border px-2 py-1.5 text-right text-base"
+                             [class]="lineProblem(line) ? 'border-red-400 bg-red-50' : 'border-gray-300'" />
+                      <span class="text-sm text-gray-600">{{ unidadLabel[line.product.unidad_base] }}</span>
+                    </div>
+                    @if (lineProblem(line); as problem) {
+                      <p class="mt-1 text-xs text-red-600">{{ problem }}</p>
+                    }
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-2 text-right font-medium text-gray-900">
+                    @if (subtotal(line) !== null) { Q{{ subtotal(line) | number: '1.2-2' }} }
+                  </td>
+                  <td class="px-2 py-2 text-right">
+                    <button type="button" (click)="remove(line)" title="Quitar de la venta"
+                            class="px-2 text-xl leading-none text-gray-400 hover:text-red-600">×</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="px-4 py-8 text-center text-gray-500">
+                    {{ loadingProducts() ? 'Cargando productos...' : 'Busque un producto para empezar la venta.' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Client and total -->
+      <section class="space-y-4">
+        <div class="space-y-3 rounded-lg bg-white p-4 shadow-sm">
+          <h2 class="font-semibold text-gray-900">Cliente</h2>
+          <label class="block text-sm text-gray-700">
+            NIT
+            <input type="text" [value]="nit()" (input)="nit.set($any($event.target).value)"
+                   (focus)="$any($event.target).select()"
+                   class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base uppercase" />
+          </label>
+          <label class="block text-sm text-gray-700">
+            Nombre
+            <input type="text" maxlength="100" [value]="nombre()" (input)="nombre.set($any($event.target).value)"
+                   [placeholder]="nitValue() === 'CF' ? 'Consumidor Final' : 'Nombre del cliente'"
+                   class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base" />
+          </label>
+          @if (clientProblem(); as problem) {
+            <p class="text-sm text-red-600">{{ problem }}</p>
+          }
+        </div>
+
+        <div class="space-y-3 rounded-lg bg-white p-4 shadow-sm">
+          <div class="flex items-baseline justify-between">
+            <span class="text-gray-600">Total</span>
+            <span class="text-3xl font-bold text-gray-900">Q{{ total() | number: '1.2-2' }}</span>
+          </div>
+          <p class="text-right text-xs text-gray-500">
+            {{ lines().length }} {{ lines().length === 1 ? 'producto' : 'productos' }} ·
+            IVA incluido Q{{ iva(total()) | number: '1.2-2' }}
+          </p>
+          <button type="button" (click)="save()" [disabled]="!canSave()"
+                  class="w-full rounded-lg bg-blue-800 px-4 py-3 text-lg font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+            {{ saving() ? 'Registrando...' : 'Registrar venta' }}
+          </button>
+          <p class="text-center text-xs text-gray-500">Ctrl+Enter</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Sales of today -->
+    <section class="overflow-hidden rounded-lg bg-white shadow-sm">
+      <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <h2 class="font-semibold text-gray-900">Ventas de hoy</h2>
+        @if (today(); as day) {
+          <p class="text-sm text-gray-600">
+            {{ day.ventas.length }} {{ day.ventas.length === 1 ? 'venta' : 'ventas' }} ·
+            <strong>Q{{ day.total | number: '1.2-2' }}</strong>
+          </p>
+        }
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <tr>
+            <th class="px-4 py-2">No.</th>
+            <th class="px-4 py-2">Hora</th>
+            <th class="px-4 py-2">Cliente</th>
+            <th class="px-4 py-2">Atendió</th>
+            <th class="px-4 py-2 text-right">Productos</th>
+            <th class="px-4 py-2 text-right">Total</th>
+            <th class="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          @for (sale of today()?.ventas ?? []; track sale.id) {
+            <tr>
+              <td class="px-4 py-2 font-mono">{{ saleNumber(sale.id) }}</td>
+              <td class="px-4 py-2">{{ hour(sale.fecha) }}</td>
+              <td class="px-4 py-2">
+                {{ sale.nombre_cliente }}
+                <span class="text-xs text-gray-500">({{ sale.nit_cliente }})</span>
+              </td>
+              <td class="px-4 py-2">{{ sale.usuario }}</td>
+              <td class="px-4 py-2 text-right">{{ sale.productos }}</td>
+              <td class="px-4 py-2 text-right font-medium">Q{{ sale.total | number: '1.2-2' }}</td>
+              <td class="px-4 py-2 text-right">
+                <button type="button" (click)="openTicket(sale.id)" class="text-blue-700 hover:underline">Ticket</button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="px-4 py-6 text-center text-gray-500">Todavía no hay ventas hoy.</td></tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>

@@ -187,6 +187,9 @@
                         @if (m.proveedor) { · {{ m.proveedor }} }
                       </p>
                     }
+                    @if (m.venta_id) {
+                      <a [routerLink]="['/print/sale', m.venta_id]" target="_blank" class="text-blue-700 hover:underline">Venta #{{ m.venta_id }}</a>
+                    }
                     @if (m.conteo_id) {
                       <a [routerLink]="['/content/counts/compare', m.conteo_id]" class="text-blue-700 hover:underline">Conteo #{{ m.conteo_id }}</a>
                     }

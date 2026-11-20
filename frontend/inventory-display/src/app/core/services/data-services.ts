@@ -21,6 +21,7 @@ import {
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { InitialLoadResult } from '../../models/initial-load';
+import { NewSale, Sale, SalesOfDay } from '../../models/sale';
 import {
   Count,
   CountAdjustmentInput,
@@ -326,6 +327,28 @@ export class DataServices {
     return this.http
       .get<ApiResponse<SupplierPurchase[]>>(`${this.API_URL}/products/${id}/suppliers`)
       .pipe(map((response) => response.data as SupplierPurchase[]));
+  }
+
+  // HU-15: register a sale (any logged-in user). 409 = some product does not reach (HU-18)
+  addSale(sale: NewSale) {
+    return this.http
+      .post<ApiResponse<Sale>>(`${this.API_URL}/add-sale`, sale)
+      .pipe(map((response) => response.data as Sale));
+  }
+
+  // HU-15: the sales of one day (default today), newest first
+  getSales(fecha?: string) {
+    const params: Record<string, string> = fecha ? { fecha } : {};
+    return this.http
+      .get<ApiResponse<SalesOfDay>>(`${this.API_URL}/sales`, { params })
+      .pipe(map((response) => response.data as SalesOfDay));
+  }
+
+  // HU-15: one sale with its products (the ticket)
+  getSale(id: number) {
+    return this.http
+      .get<ApiResponse<Sale>>(`${this.API_URL}/sales/${id}`)
+      .pipe(map((response) => response.data as Sale));
   }
 
   // HU-23 (owner only): low-stock products grouped by the supplier that brought them last

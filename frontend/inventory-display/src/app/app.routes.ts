@@ -37,6 +37,10 @@ export const routes: Routes = [
         path: 'products', loadComponent: () => import('./utils/products/products').then(p => p.Products)
       },
       {
+        // HU-15: the counter (any logged-in user)
+        path: 'sales', loadComponent: () => import('./utils/sales/sales').then(s => s.Sales)
+      },
+      {
         // HU-19: stock made for a phone (the only page in the phone view), every user
         path: 'stock', loadComponent: () => import('./utils/stock/stock').then(s => s.Stock)
       },
@@ -122,6 +126,12 @@ export const routes: Routes = [
         path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },
     ]
+  },
+
+  // HU-15: the sale ticket, outside 'content' so it prints without the sidebar
+  {path: 'print/sale/:id',
+    canActivate: [authGuard],
+    loadComponent: () => import('./utils/sale-ticket/sale-ticket').then(s => s.SaleTicket)
   },
 
   // HU-32: the count sheets, outside 'content' so they print without the sidebar

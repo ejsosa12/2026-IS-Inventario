@@ -1,1 +1,69 @@
-<p>sale-ticket works!</p>
+<!-- HU-15: 80 mm ticket. Sample document, no fiscal value -->
+<div class="ticket-page">
+  <div class="no-print ticket-actions">
+    <button type="button" (click)="print()">Imprimir</button>
+    <button type="button" (click)="close()">Cerrar</button>
+  </div>
+
+  @if (error()) {
+    <p class="ticket">{{ error() }}</p>
+  } @else if (sale(); as s) {
+    <article class="ticket">
+      <header class="center">
+        <p class="big bold">{{ store.nombre }}</p>
+        <p>{{ store.razonSocial }}</p>
+        <p>NIT: {{ store.nit }}</p>
+        <p>{{ store.direccion }}</p>
+        <p>Tel. {{ store.telefono }}</p>
+      </header>
+
+      <p class="rule"></p>
+      <p class="center bold">DOCUMENTO DE PRUEBA</p>
+      <p class="center bold">SIN VALIDEZ FISCAL</p>
+      <p class="rule"></p>
+
+      <p><span class="bold">Venta No.</span> {{ saleNumber(s.id) }}</p>
+      <p><span class="bold">Fecha:</span> {{ date(s.fecha) }}</p>
+      <p><span class="bold">NIT:</span> {{ s.nit_cliente }}</p>
+      <p><span class="bold">Nombre:</span> {{ s.nombre_cliente }}</p>
+      <p><span class="bold">Atendió:</span> {{ s.usuario }}</p>
+
+      <p class="rule"></p>
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Cant.</th>
+            <th class="left">Descripción</th>
+            <th>P.U.</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of s.items ?? []; track item.producto_id) {
+            <tr>
+              <td class="left nowrap">
+                {{ item.cantidad | number: qtyFormat(item.unidad_base) }}
+                @if (item.unidad_base !== 'unidad') { {{ unidadLabel[item.unidad_base] }} }
+              </td>
+              <td class="left">{{ item.nombre }}</td>
+              <td>{{ item.precio | number: '1.2-2' }}</td>
+              <td>{{ item.subtotal | number: '1.2-2' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <p class="rule"></p>
+
+      <p class="row big bold"><span>TOTAL</span><span>Q{{ s.total | number: '1.2-2' }}</span></p>
+      <p class="row"><span>IVA incluido (12 %)</span><span>Q{{ s.iva | number: '1.2-2' }}</span></p>
+
+      <p class="rule"></p>
+      <p class="center">Sujeto a pagos trimestrales ISR</p>
+      <p class="center">Precios en quetzales, IVA incluido</p>
+      <p class="center bold space">¡Gracias por su compra!</p>
+      <p class="center small">Este ticket es un ejemplo para un proyecto universitario.</p>
+    </article>
+  } @else {
+    <p class="ticket">Cargando...</p>
+  }
+</div>

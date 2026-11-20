@@ -461,6 +461,8 @@ def _history_row_to_json(row):
         "numero_factura": row["numero_factura"],
         # HU-34: the physical count that made an ajuste_mas / ajuste_menos
         "conteo_id": row["conteo_id"],
+        # HU-15: the sale (ticket) a 'venta' row belongs to
+        "venta_id": row["venta_id"],
         # Only an entrada can be voided; its 'anulacion' row is the one that takes the stock back
         "anulada": row["tipo"] == "entrada" and bool(row["anulada"]),
         # HU-06: "2 caja" as it came on the invoice

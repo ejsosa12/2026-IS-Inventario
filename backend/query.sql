@@ -188,6 +188,22 @@ create table count_items(
 	FOREIGN KEY(contado_por) REFERENCES users(users)
 );
 
+-- HU-15: una venta (ticket). Cada producto vendido es una fila 'venta' en movements con venta_id.
+-- El precio es products.precio de ese momento; el total ya incluye IVA (12 %, Guatemala)
+create table sales(
+	id int AUTO_INCREMENT not null,
+	usuario_id int not null,
+	fecha datetime not null default current_timestamp,
+	-- 'CF' = consumidor final; si no, un NIT con dígito verificador válido (lo revisa Flask)
+	nit_cliente varchar(20) not null default 'CF',
+	nombre_cliente varchar(100) not null default 'Consumidor Final',
+	total decimal(12,2) not null,
+	PRIMARY KEY(id),
+	INDEX idx_sales_fecha (fecha),
+	CONSTRAINT chk_sales_total CHECK (total >= 0),
+	CONSTRAINT fk_sales_usuario FOREIGN KEY(usuario_id) REFERENCES users(users)
+);
+
 -- HU-11, HU-12, HU-15, HU-16, HU-17, HU-28
 -- Todo cambio de existencia pasa por aquí
 create table movements(
@@ -204,6 +220,7 @@ create table movements(
 	cantidad_factura decimal(10,3) check (cantidad_factura >= 0),
 	-- Precio por unidad base en ese momento. En entradas, lo que se pagó.
 	-- En daño y uso interno, el último precio de compra (para saber cuánto se perdió)
+	-- En ventas (HU-15), el precio de venta del producto en ese momento
 	-- 4 decimales: Q100 el rollo de 30 m = Q3.3333 por metro
 	precio decimal(12,4) check (precio >= 0),
 	-- HU-16 y HU-17: por qué salió (se rompió, para qué se usó). HU-14: por qué se anuló.
@@ -220,6 +237,8 @@ create table movements(
 	presentacion_id int,
 	-- HU-34: conteo del que salió el ajuste. NULL en el resto
 	conteo_id int,
+	-- HU-15: venta (ticket) a la que pertenece. NULL en el resto
+	venta_id int,
 	PRIMARY KEY(id),
 	-- Daño, uso interno, anulación y ajustes siempre llevan motivo
 	CONSTRAINT chk_movements_motivo
@@ -230,7 +249,8 @@ create table movements(
 	FOREIGN KEY(proveedor_id) REFERENCES suppliers(id),
 	FOREIGN KEY(entrada_id) REFERENCES entries(id),
 	FOREIGN KEY(presentacion_id) REFERENCES presentations(id),
-	FOREIGN KEY(conteo_id) REFERENCES counts(id)
+	FOREIGN KEY(conteo_id) REFERENCES counts(id),
+	CONSTRAINT fk_movements_venta FOREIGN KEY(venta_id) REFERENCES sales(id)
 );
 
 -- ============================================================

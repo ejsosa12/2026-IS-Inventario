@@ -28,6 +28,7 @@ export interface ProductMovement {
   entrada_id: number | null;
   numero_factura: string | null;
   conteo_id: number | null; // HU-34: the physical count that made an ajuste
+  venta_id: number | null; // HU-15: the sale (ticket) of a 'venta' row
   anulada: boolean; // an entrada that was voided later (HU-14)
   presentacion: string | null; // "caja": how it came on the invoice
   cantidad_presentacion: number | null;

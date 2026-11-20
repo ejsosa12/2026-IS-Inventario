@@ -27,6 +27,7 @@ def create_app():
     from .movements import movements
     from .users import users
     from .counts import counts
+    from .sales import sales
 
     app.register_blueprint(auth_user, url_prefix='/')
     app.register_blueprint(catalog, url_prefix='/')
@@ -34,5 +35,6 @@ def create_app():
     app.register_blueprint(movements, url_prefix='/')
     app.register_blueprint(users, url_prefix='/')
     app.register_blueprint(counts, url_prefix='/')
+    app.register_blueprint(sales, url_prefix='/')
 
     return app

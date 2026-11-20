@@ -1,0 +1,119 @@
+/* HU-15: 80 mm thermal paper (about 72 mm printable) */
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
+.ticket-page {
+  min-height: 100vh;
+  background: #e5e7eb;
+  padding: 16px 0;
+}
+
+.ticket {
+  width: 72mm;
+  margin: 0 auto;
+  padding: 4mm;
+  background: white;
+  color: black;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ticket p {
+  margin: 0;
+}
+
+.center {
+  text-align: center;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+.big {
+  font-size: 13px;
+}
+
+.small {
+  font-size: 9px;
+  margin-top: 4px !important;
+}
+
+.space {
+  margin-top: 6px !important;
+}
+
+.rule {
+  border-top: 1px dashed black;
+  margin: 5px 0 !important;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: right;
+  vertical-align: top;
+  padding: 1px 0 1px 3px;
+}
+
+th {
+  border-bottom: 1px solid black;
+}
+
+.left {
+  text-align: left;
+  padding-left: 0;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.ticket-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ticket-actions button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #1e40af;
+  background: #1e40af;
+  color: white;
+  cursor: pointer;
+}
+
+.ticket-actions button + button {
+  background: white;
+  color: #1e40af;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .ticket-page {
+    background: white;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .ticket {
+    margin: 0;
+  }
+}

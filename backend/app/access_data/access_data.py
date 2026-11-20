@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import os
 from contextlib import contextmanager
+from decimal import Decimal
 
 import pymysql
 from pymysql.cursors import DictCursor
@@ -951,6 +952,81 @@ class AccessData:
                 return cursor.fetchone()
 
     # ------------------------------------------------------------
+    # HU-15: sales. One header in sales, one 'venta' movement per product
+    # ------------------------------------------------------------
+
+    def add_sale(self, usuario_id, nit_cliente, nombre_cliente, items):
+        """Saves a sale and returns its id. items: [(producto_id, cantidad)], cantidad in base unit.
+
+        Everything in one transaction. HU-18: every product is locked in id order and checked;
+        if any would go below 0 it raises NegativeStock (with all of them) and nothing is saved.
+        The price is the product's SALE price at this moment (HU-02: only the owner sets it),
+        read after the lock, so a price change in the middle cannot mix two prices in one ticket.
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    self._check_stock_change(cursor, {pid: -cantidad for pid, cantidad in items})
+                    cursor.execute("SELECT id, precio FROM products WHERE id IN %(ids)s",
+                                   {"ids": [pid for pid, _ in items]})
+                    prices = {row["id"]: row["precio"] for row in cursor.fetchall()}
+                    total = sum((cantidad * prices[pid]).quantize(Decimal("0.01"))
+                                for pid, cantidad in items)
+                    cursor.execute("""
+                        INSERT INTO sales (usuario_id, nit_cliente, nombre_cliente, total)
+                        VALUES (%(usuario_id)s, %(nit)s, %(nombre)s, %(total)s)
+                    """, {"usuario_id": usuario_id, "nit": nit_cliente, "nombre": nombre_cliente,
+                          "total": total})
+                    sale_id = cursor.lastrowid
+                    cursor.executemany("""
+                        INSERT INTO movements (tipo, cantidad, precio, producto_id, usuario_id, venta_id)
+                        VALUES ('venta', %s, %s, %s, %s, %s)
+                    """, [(cantidad, prices[pid], pid, usuario_id, sale_id) for pid, cantidad in items])
+                conn.commit()
+            except Exception:
+                # Also releases the locks
+                conn.rollback()
+                raise
+            return sale_id
+
+    SALE_SELECT = """
+        SELECT s.id, s.fecha, s.nit_cliente, s.nombre_cliente, s.total,
+               s.usuario_id, u.nombre AS usuario,
+               (SELECT COUNT(*) FROM movements m WHERE m.venta_id = s.id) AS productos
+        FROM sales s
+        JOIN users u ON u.users = s.usuario_id
+    """
+
+    def get_sales(self, desde, hasta, limit=200):
+        """Sales with desde <= fecha < hasta, newest first."""
+        query = self.SALE_SELECT + """
+            WHERE s.fecha >= %(desde)s AND s.fecha < %(hasta)s
+            ORDER BY s.fecha DESC, s.id DESC LIMIT %(limit)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"desde": desde, "hasta": hasta, "limit": limit})
+                return cursor.fetchall()
+
+    def get_sale(self, sale_id):
+        """A sale with its products (key 'items'), or None if it does not exist."""
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(self.SALE_SELECT + "WHERE s.id = %(id)s", {"id": sale_id})
+                sale = cursor.fetchone()
+                if sale is None:
+                    return None
+                cursor.execute("""
+                    SELECT m.producto_id, p.codigo, p.nombre, p.unidad_base, m.cantidad, m.precio
+                    FROM movements m
+                    JOIN products p ON p.id = m.producto_id
+                    WHERE m.venta_id = %(id)s AND m.tipo = 'venta'
+                    ORDER BY m.id
+                """, {"id": sale_id})
+                sale["items"] = cursor.fetchall()
+                return sale
+
+    # ------------------------------------------------------------
     # HU-20: kárdex. Everything that came in and went out of one product
     # ------------------------------------------------------------
 
@@ -985,7 +1061,7 @@ class AccessData:
             SELECT k.id, k.tipo, k.cantidad, k.cambio, k.existencia, k.precio, k.motivo, k.fecha,
                    k.usuario_id, u.nombre AS usuario,
                    k.proveedor_id, s.nombre AS proveedor,
-                   k.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, k.conteo_id,
+                   k.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, k.conteo_id, k.venta_id,
                    pr.nombre AS presentacion, pr.factor
             FROM (
                 SELECT m.*,
@@ -1504,7 +1580,7 @@ class AccessData:
                    m.producto_id, p.codigo, p.nombre AS producto, p.unidad_base,
                    m.usuario_id, u.nombre AS usuario,
                    m.proveedor_id, s.nombre AS proveedor,
-                   m.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, m.conteo_id,
+                   m.entrada_id, e.numero_factura, e.anulada_en IS NOT NULL AS anulada, m.conteo_id, m.venta_id,
                    pr.nombre AS presentacion, pr.factor
             FROM movements m
             JOIN products p ON p.id = m.producto_id
