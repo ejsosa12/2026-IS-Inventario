@@ -126,6 +126,7 @@ The user is learning Docker; explain briefly what each step does. They run docke
 - Idea for later (user's curiosity, 2026-11-19): try running an own mail server for `@elbuenclavo.tech` (MX/SPF/DKIM/DMARC), as an experiment only.
 
 ### Pending reviews
+- Time zone on the VPS (noted 2026-11-19, to check when every HU is done, in the final polish): the containers probably run in **UTC** (6 h ahead of Guatemala), so `CURRENT_TIMESTAMP` in MariaDB and `date.today()` in Flask would be UTC. Effects: "Ventas de hoy" (HU-15) would switch day at 18:00 local, and tickets, entries, movements and reports would show UTC times. Check with `ssh -i ~/.ssh/inventario_deploy deploy@api.elbuenclavo.tech 'cd /opt/inventario && docker compose exec -T backend date && docker compose exec -T db date'`. Likely fix: `TZ: America/Guatemala` on `db` and `backend` in `deploy/docker-compose.yml` (and the local one), making sure both images have tzdata (`python:3.13-slim` may need `apt-get install tzdata` in `backend/Dockerfile`); rows already saved in UTC would stay 6 h off. Propose the plan first.
 - HU-31 (inventario inicial desde Excel, built 2026-11-17): the user only skimmed it and wants to review it carefully. Remind them and walk through it with them (template, preview with row errors, all-or-nothing save, existing products without movements, the `inicial` movement, and the new Existencia inicial / Precio de compra fields in Agregar producto) before considering it closed.
 
 ### Extras
