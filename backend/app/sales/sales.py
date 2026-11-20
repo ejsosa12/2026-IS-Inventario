@@ -294,11 +294,12 @@ DASHBOARD_DAYS = (7, 30)
 
 
 @sales.route('api/v1/dashboard-summary', methods=['GET'])
-@requiere_rol()  # decided 2026-11-20: employees also see these two numbers on the dashboard
+@requiere_rol()  # decided 2026-11-20: employees also see the dashboard's numbers and lists
 def get_dashboard_summary():
     """?dias=7|30 (default 30). Only what the dashboard shows: the money in the store
     (HU-26 total: existencia × precio_compra, products without price left out) and the
-    sales of the last N days for the chart (HU-24). The full reports stay owner only."""
+    sales of the last N days for the chart (HU-24), the 4 most sold products of those days,
+    the 4 latest sales and the 4 latest movements. The full reports stay owner only."""
     dias = request.args.get("dias", "30")
     if not dias.isdigit() or int(dias) not in DASHBOARD_DAYS:
         return _error("dias must be 7 or 30")
@@ -319,8 +320,54 @@ def get_dashboard_summary():
             "desde": desde.isoformat(),
             "hasta": hasta.isoformat(),
             "por_dia": _sales_per_day(access, desde, hasta),
+            # The dashboard's three lists (decided 2026-11-20: every user, no purchase prices)
+            "mas_vendidos": _dashboard_top(access, desde, hasta),
+            "ultimas_ventas": [
+                _sale_to_json(row)
+                for row in access.get_sales(datetime(2000, 1, 1), datetime.combine(hasta + timedelta(days=1), time.min), DASHBOARD_ROWS)
+            ],
+            "ultimos_movimientos": [
+                _activity_to_json(row) for row in access.get_movements(limit=DASHBOARD_ROWS)["movimientos"]
+            ],
         },
     }, 200
+
+
+DASHBOARD_ROWS = 4
+
+
+def _dashboard_top(access, desde, hasta):
+    """HU-24 in short: the 4 most sold products of the chart's days (returns subtracted)."""
+    rows = access.get_top_sales(datetime.combine(desde, time.min), datetime.combine(hasta + timedelta(days=1), time.min))
+    return [{
+        "id": row["id"],
+        "codigo": row["codigo"],
+        "nombre": row["nombre"],
+        "categoria": row["categoria"],
+        "unidad_base": row["unidad_base"],
+        "cantidad": float(row["cantidad"]),
+        "ventas": row["ventas"],
+        "dinero": float(row["dinero"]),
+    } for row in rows[:DASHBOARD_ROWS]]
+
+
+def _activity_to_json(row):
+    """A movement for the dashboard's "Actividad reciente": what, how much, who and when.
+    No price: the purchase price is the owner's (HU-29)."""
+    return {
+        "id": row["id"],
+        "tipo": row["tipo"],
+        "cantidad": float(row["cantidad"]),
+        "cambio": float(row["cambio"]),  # signed: + adds stock, - takes it out
+        "fecha": row["fecha"].isoformat(),
+        "producto_id": row["producto_id"],
+        "codigo": row["codigo"],
+        "producto": row["producto"],
+        "unidad_base": row["unidad_base"],
+        "usuario": row["usuario"],
+        "venta_id": row["venta_id"],
+        "numero_factura": row["numero_factura"],
+    }
 
 
 STALE_DAYS = (30, 60, 90)

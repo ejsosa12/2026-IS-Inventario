@@ -220,77 +220,58 @@
                 </div>
                 <!-- Add new graph from sale here HU-24 -->
 
-                <!-- Top Products -->
+                <!-- HU-24 in short: the 4 most sold products of the chart's days (7 / 30 días) -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Top Products</h3>
-                        <button class="text-cordes-blue hover:text-cordes-dark text-sm font-medium">View All</button>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Más vendidos</h3>
+                            <p class="text-gray-600 text-sm">Últimos {{ chartDays() }} días</p>
+                        </div>
+                        <!-- The full report (Análisis) is owner only -->
+                        @if (isAdmin()) {
+                            <a routerLink="/content/reports/top-sales" class="text-blue-800 hover:underline text-sm font-medium">Ver todo</a>
+                        }
                     </div>
-                    <div class="space-y-4">
-                        <div class="flex items-center space-x-4">
-                            <img src="https://i.ytimg.com/vi/08JoSCHV9VY/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAC7M1K4hMJbmFQQFppnSNzsZAcRA" alt="Product" class="w-12 h-12 rounded-lg">
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-900">iPhone 15 Pro</p>
-                                <p class="text-sm text-gray-600">Electronics</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="font-semibold text-gray-900">$1,299</p>
-                                <p class="text-sm text-green-600">+12%</p>
-                            </div>
+                    @if (topProducts(); as top) {
+                        <div class="space-y-4">
+                            @for (p of top; track p.id; let i = $index) {
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-10 h-10 flex-shrink-0 rounded-lg bg-blue-100 text-blue-800 font-bold flex items-center justify-center">
+                                        {{ i + 1 }}
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium text-gray-900 truncate">{{ p.nombre }}</p>
+                                        <p class="text-sm text-gray-600">{{ p.categoria ?? 'Sin categoría' }}</p>
+                                    </div>
+                                    <div class="text-right whitespace-nowrap">
+                                        <p class="font-semibold text-gray-900">{{ amount(p.cantidad, p.unidad_base) }}</p>
+                                        <p class="text-sm text-gray-500">Q{{ p.dinero | number: '1.2-2' }}</p>
+                                    </div>
+                                </div>
+                            } @empty {
+                                <p class="text-sm text-gray-500">No hubo ventas en estos días.</p>
+                            }
                         </div>
-                        <div class="flex items-center space-x-4">
-                            <img src="https://i.ytimg.com/vi/08JoSCHV9VY/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAC7M1K4hMJbmFQQFppnSNzsZAcRA" alt="Product" class="w-12 h-12 rounded-lg">
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-900">MacBook Pro</p>
-                                <p class="text-sm text-gray-600">Computers</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="font-semibold text-gray-900">$2,499</p>
-                                <p class="text-sm text-green-600">+8%</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <img src="https://i.ytimg.com/vi/08JoSCHV9VY/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAC7M1K4hMJbmFQQFppnSNzsZAcRA" alt="Product" class="w-12 h-12 rounded-lg">
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-900">AirPods Pro</p>
-                                <p class="text-sm text-gray-600">Audio</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="font-semibold text-gray-900">$249</p>
-                                <p class="text-sm text-green-600">+15%</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <img src="https://i.ytimg.com/vi/08JoSCHV9VY/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLAC7M1K4hMJbmFQQFppnSNzsZAcRA" alt="Product" class="w-12 h-12 rounded-lg">
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-900">Apple Watch</p>
-                                <p class="text-sm text-gray-600">Wearables</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="font-semibold text-gray-900">$399</p>
-                                <p class="text-sm text-green-600">+6%</p>
-                            </div>
-                        </div>
-                    </div>
+                    } @else if (salesError()) {
+                        <p class="text-sm text-red-700">{{ salesError() }}</p>
+                    } @else {
+                        <p class="text-sm text-gray-500">Cargando...</p>
+                    }
                 </div>
             </div>
 
-            <!-- Recent Orders Table -->
+            <!-- HU-15: the 4 latest sales (any day), newest first -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Recent Orders</h3>
-                            <p class="text-gray-600 text-sm">Latest customer orders and transactions</p>
+                            <h3 class="text-lg font-semibold text-gray-900">Últimas ventas</h3>
+                            <p class="text-gray-600 text-sm">Las 4 ventas más recientes</p>
                         </div>
-                        <div class="flex space-x-3">
-                            <button class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                                <i class="fas fa-download mr-2"></i>Export
-                            </button>
-                            <button class="px-4 py-2 bg-cordes-blue text-white rounded-lg hover:bg-cordes-dark transition-colors">
-                                <i class="fas fa-plus mr-2"></i>Add Order
-                            </button>
-                        </div>
+                        <a routerLink="/content/sales"
+                           class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors">
+                            <i class="fas fa-cash-register mr-2"></i>Vender
+                        </a>
                     </div>
                 </div>
 
@@ -298,137 +279,54 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Order ID
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Customer
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Product</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Amount</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase
-                                  tracking-wider">
-                                  Actions</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No.</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Atendió</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Productos</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-gray-900">#15847</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <img src="https://www.investopedia.com/thmb/NSwuyMYGVWCHVIi1AEoaPkdmMD0=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Brand-loyalty_final-8ad57b86183e42348e18bc306c87778e.png" alt="Customer" class="w-8 h-8 rounded-full mr-3">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900">John Doe</div>
-                                            <div class="text-sm text-gray-500">john@example.com</div>
+                            @for (sale of latestSales() ?? []; track sale.id) {
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono font-medium text-gray-900">{{ saleNumber(sale.id) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">{{ sale.nombre_cliente }}</div>
+                                        <div class="text-sm text-gray-500">NIT {{ sale.nit_cliente }}</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ sale.usuario }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ sale.productos }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                        Q{{ sale.total | number: '1.2-2' }}
+                                        <!-- HU-13 -->
+                                        @if (sale.devuelto > 0) {
+                                            <div class="font-normal text-xs text-red-700">Q{{ sale.devuelto | number: '1.2-2' }} devuelto</div>
+                                        }
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ dateTime(sale.fecha) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <div class="flex space-x-3">
+                                            <button type="button" (click)="openTicket(sale.id)" title="Ver ticket" aria-label="Ver ticket"
+                                                    class="text-blue-800 hover:text-gray-900">
+                                                <i class="fas fa-receipt"></i>
+                                            </button>
+                                            <!-- HU-13 -->
+                                            <a routerLink="/content/returns" [queryParams]="{ venta: sale.id }" title="Devolver" aria-label="Devolver"
+                                               class="text-gray-600 hover:text-gray-900">
+                                                <i class="fas fa-rotate-left"></i>
+                                            </a>
                                         </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">iPhone 15 Pro</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">$1,299.00</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                        Completed
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">May 22, 2025</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button class="text-cordes-blue hover:text-cordes-dark">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="text-gray-600 hover:text-gray-900">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-gray-900">#15846</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <img src="https://www.investopedia.com/thmb/NSwuyMYGVWCHVIi1AEoaPkdmMD0=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Brand-loyalty_final-8ad57b86183e42348e18bc306c87778e.png" alt="Customer" class="w-8 h-8 rounded-full mr-3">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900">Sarah Wilson</div>
-                                            <div class="text-sm text-gray-500">sarah@example.com</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">MacBook Pro</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">$2,499.00</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                        Pending
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">May 21, 2025</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button class="text-cordes-blue hover:text-cordes-dark">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="text-gray-600 hover:text-gray-900">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-gray-900">#15845</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <img src="https://www.investopedia.com/thmb/NSwuyMYGVWCHVIi1AEoaPkdmMD0=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Brand-loyalty_final-8ad57b86183e42348e18bc306c87778e.png" alt="Customer" class="w-8 h-8 rounded-full mr-3">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900">Mike Johnson</div>
-                                            <div class="text-sm text-gray-500">mike@example.com</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">AirPods Pro</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">$249.00</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                                        Cancelled
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">May 20, 2025</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button class="text-cordes-blue hover:text-cordes-dark">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="text-gray-600 hover:text-gray-900">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="text-red-600 hover:text-red-900">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                            } @empty {
+                                <tr>
+                                    <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
+                                        {{ latestSales() ? 'Todavía no hay ventas.' : 'Cargando...' }}
+                                    </td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -436,38 +334,38 @@
 
             <!-- Bottom Row -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Recent Activity -->
+                <!-- The 4 latest movements (any type, from the movements table), newest first -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Actividad reciente</h3>
+                        <!-- HU-27 is owner only -->
+                        @if (isAdmin()) {
+                            <a routerLink="/content/reports/movements" class="text-blue-800 hover:underline text-sm font-medium">Ver todo</a>
+                        }
+                    </div>
                     <div class="space-y-4">
-                        <div class="flex items-start space-x-3">
-                            <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-gray-900">New user registered</p>
-                                <p class="text-xs text-gray-500">sarah.johnson@email.com • 2 minutes ago</p>
+                        @for (m of activity() ?? []; track m.id) {
+                            <div class="flex items-start space-x-3">
+                                <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0" [class]="m.cambio >= 0 ? 'bg-green-500' : 'bg-red-500'"></div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm text-gray-900">
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold mr-1" [class]="typeClasses(m.tipo)">{{ typeLabel(m.tipo) }}</span>
+                                        {{ m.producto }}
+                                        <span class="font-semibold" [class]="m.cambio >= 0 ? 'text-green-700' : 'text-red-700'">
+                                            {{ m.cambio >= 0 ? '+' : '−' }}{{ amount(m.cantidad, m.unidad_base) }}
+                                        </span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        {{ m.usuario }}
+                                        @if (m.venta_id) { · Venta #{{ m.venta_id }} }
+                                        @if (m.numero_factura) { · Factura {{ m.numero_factura }} }
+                                        • {{ ago(m.fecha) }}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex items-start space-x-3">
-                            <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-gray-900">Order completed</p>
-                                <p class="text-xs text-gray-500">Order #15847 - $299.99 • 5 minutes ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start space-x-3">
-                            <div class="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-gray-900">Product updated</p>
-                                <p class="text-xs text-gray-500">iPhone 15 Pro - Stock: 25 • 8 minutes ago</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start space-x-3">
-                            <div class="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
-                            <div class="flex-1">
-                                <p class="text-sm text-gray-900">Payment received</p>
-                                <p class="text-xs text-gray-500">$1,245.00 from client • 12 minutes ago</p>
-                            </div>
-                        </div>
+                        } @empty {
+                            <p class="text-sm text-gray-500">{{ activity() ? 'Todavía no hay movimientos.' : 'Cargando...' }}</p>
+                        }
                     </div>
                 </div>
 

@@ -6,7 +6,10 @@ import { DataServices } from '../../core/services/data-services';
 import { injectPresentations } from '../../core/utils/two-units';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
-import { SalesDay } from '../../models/report';
+import { DashboardActivity, DashboardTopProduct, SalesDay } from '../../models/report';
+import { Sale } from '../../models/sale';
+import { MovementTipo } from '../../models/movement';
+import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
 import { SalesChart } from '../sales-chart/sales-chart';
 
 // Columns of "Productos a agotarse" that can be sorted by clicking their title
@@ -107,6 +110,12 @@ export class Dashboard {
   salesDays = signal<SalesDay[] | null>(null);
   salesError = signal<string | null>(null);
 
+  // The three lists of dashboard-summary (null = loading): most sold of the chart's days,
+  // latest sales and latest movements. Every user sees them
+  topProducts = signal<DashboardTopProduct[] | null>(null);
+  latestSales = signal<Sale[] | null>(null);
+  activity = signal<DashboardActivity[] | null>(null);
+
   constructor() {
     this.loadSummary();
     this.dataServices.getLowStock().subscribe({
@@ -130,11 +139,15 @@ export class Dashboard {
 
   private loadSummary() {
     this.salesDays.set(null);
+    this.topProducts.set(null);
     this.salesError.set(null);
     this.dataServices.getDashboardSummary(this.chartDays()).subscribe({
       next: (summary) => {
         this.inventoryValue.set(summary.dinero_bodega);
         this.salesDays.set(summary.por_dia);
+        this.topProducts.set(summary.mas_vendidos);
+        this.latestSales.set(summary.ultimas_ventas);
+        this.activity.set(summary.ultimos_movimientos);
       },
       error: () => this.salesError.set('No se pudieron cargar las ventas'),
     });
@@ -144,6 +157,41 @@ export class Dashboard {
   amount(value: number, unidad: UnidadBase): string {
     const decimals = unidad === 'unidad' ? 0 : 3;
     return `${+value.toFixed(decimals)} ${this.unidadLabel[unidad]}`;
+  }
+
+  typeLabel(tipo: MovementTipo): string {
+    return MOVEMENT_TYPES[tipo]?.label ?? tipo;
+  }
+
+  typeClasses(tipo: MovementTipo): string {
+    return MOVEMENT_TYPES[tipo]?.classes ?? 'bg-gray-100 text-gray-800';
+  }
+
+  // The sale ticket in a new tab (same as Vender)
+  openTicket(id: number) {
+    window.open(`/print/sale/${id}`, '_blank');
+  }
+
+  saleNumber(id: number): string {
+    return String(id).padStart(6, '0');
+  }
+
+  // "20/11/2026 09:27", cut from the ISO text by hand (no time zone conversion)
+  dateTime(iso: string): string {
+    const [y, m, d] = iso.slice(0, 10).split('-');
+    return `${d}/${m}/${y} ${iso.slice(11, 16)}`;
+  }
+
+  // "hace 5 min", "hace 3 h", "hace 2 días". Flask sends local time without a zone,
+  // which new Date() also reads as local time
+  ago(iso: string): string {
+    const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+    if (minutes < 1) return 'ahora';
+    if (minutes < 60) return `hace ${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `hace ${hours} h`;
+    const days = Math.floor(hours / 24);
+    return days === 1 ? 'ayer' : `hace ${days} días`;
   }
 
   // 1 producto / 5 productos

@@ -1,5 +1,7 @@
 // Same shapes Flask returns in backend/app/catalog/catalog.py (reports)
 import { UnidadBase } from './product';
+import { MovementTipo } from './movement';
+import { Sale } from './sale';
 
 // HU-26: one product with stock and what it is worth at its purchase price
 export interface InventoryValueProduct {
@@ -71,6 +73,36 @@ export interface DashboardSummary {
   desde: string;
   hasta: string;
   por_dia: SalesDay[];
+  mas_vendidos: DashboardTopProduct[]; // the 4 most sold of those days
+  ultimas_ventas: Sale[]; // the 4 latest sales
+  ultimos_movimientos: DashboardActivity[]; // the 4 latest movements
+}
+
+export interface DashboardTopProduct {
+  id: number;
+  codigo: string;
+  nombre: string;
+  categoria: string | null;
+  unidad_base: UnidadBase;
+  cantidad: number;
+  ventas: number;
+  dinero: number;
+}
+
+// A movement on the dashboard (no price: purchase prices are the owner's)
+export interface DashboardActivity {
+  id: number;
+  tipo: MovementTipo;
+  cantidad: number;
+  cambio: number; // signed: + adds stock, - takes it out
+  fecha: string;
+  producto_id: number;
+  codigo: string;
+  producto: string;
+  unidad_base: UnidadBase;
+  usuario: string;
+  venta_id: number | null;
+  numero_factura: string | null;
 }
 
 // HU-25: a product with stock that did not sell in the chosen time
