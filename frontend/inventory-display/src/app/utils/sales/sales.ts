@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DataServices } from '../../core/services/data-services';
 import { normalizeNit } from '../../core/utils/nit';
@@ -25,7 +26,7 @@ interface SaleLine {
 // Enter in the search adds the first result and jumps to its quantity, Enter in the quantity
 // goes back to the search, Ctrl+Enter registers the sale. Any logged-in user.
 @Component({
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, RouterLink],
   selector: 'app-sales',
   styleUrl: './sales.css',
   templateUrl: './sales.html',

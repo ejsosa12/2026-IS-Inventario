@@ -9,7 +9,8 @@ export type MovementTipo =
   | 'anulacion'
   | 'ajuste_mas' // HU-34: the count found more than the system had
   | 'ajuste_menos' // HU-34: the count found less
-  | 'inicial'; // HU-31: what the store had when it started using the system
+  | 'inicial' // HU-31: what the store had when it started using the system
+  | 'devolucion'; // HU-13: a customer gave back products of a sale
 
 // One row of the kárdex
 export interface ProductMovement {

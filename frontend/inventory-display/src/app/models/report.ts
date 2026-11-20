@@ -40,7 +40,8 @@ export interface TopSale {
   categoria: string | null;
   unidad_base: UnidadBase;
   activo: boolean;
-  cantidad: number; // sold, in the base unit
+  cantidad: number; // sold minus returned (HU-13), in the base unit
+  devuelto: number; // HU-13: returned in the range
   ventas: number; // tickets it appears in
   dinero: number; // Σ cantidad × sale price
   existencia: number; // now
@@ -58,7 +59,8 @@ export interface SalesDay {
 export interface TopSalesReport {
   desde: string | null;
   hasta: string | null;
-  resumen: { productos: number; ventas: number; dinero: number };
+  // dinero = vendido (tickets) − devuelto (HU-13 returns in the range)
+  resumen: { productos: number; ventas: number; dinero: number; vendido: number; devuelto: number };
   productos: TopSale[]; // most sold quantity first
   por_dia: SalesDay[]; // every day of the range (0 when nothing was sold), oldest first
 }

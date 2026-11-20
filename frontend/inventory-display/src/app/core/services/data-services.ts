@@ -21,7 +21,14 @@ import {
 import { NewUser, User } from '../../models/user';
 import { NewOutput, Output, OutputTipo } from '../../models/output';
 import { InitialLoadResult } from '../../models/initial-load';
-import { NewSale, Sale, SalesOfDay } from '../../models/sale';
+import {
+  NewReturn,
+  NewSale,
+  ReturnResult,
+  ReturnRow,
+  Sale,
+  SalesOfDay,
+} from '../../models/sale';
 import {
   Count,
   CountAdjustmentInput,
@@ -391,6 +398,20 @@ export class DataServices {
     return this.http
       .get<ApiResponse<Sale>>(`${this.API_URL}/sales/${id}`)
       .pipe(map((response) => response.data as Sale));
+  }
+
+  // HU-13: a customer gives back products of a sale. 409 = more than what is left to return
+  addReturn(data: NewReturn) {
+    return this.http
+      .post<ApiResponse<ReturnResult>>(`${this.API_URL}/add-return`, data)
+      .pipe(map((response) => response.data as ReturnResult));
+  }
+
+  // HU-13: the latest returned products, newest first
+  getReturns() {
+    return this.http
+      .get<ApiResponse<ReturnRow[]>>(`${this.API_URL}/returns`)
+      .pipe(map((response) => response.data ?? []));
   }
 
   // HU-23 (owner only): low-stock products grouped by the supplier that brought them last

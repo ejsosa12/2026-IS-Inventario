@@ -232,6 +232,8 @@
               <td class="px-4 py-2 text-right font-medium">Q{{ sale.total | number: '1.2-2' }}</td>
               <td class="px-4 py-2 text-right">
                 <button type="button" (click)="openTicket(sale.id)" class="text-blue-700 hover:underline">Ticket</button>
+                <!-- HU-13 -->
+                <a routerLink="/content/returns" [queryParams]="{ venta: sale.id }" class="ml-3 text-blue-700 hover:underline">Devolver</a>
               </td>
             </tr>
           } @empty {

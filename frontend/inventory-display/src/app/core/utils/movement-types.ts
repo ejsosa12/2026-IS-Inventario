@@ -11,4 +11,5 @@ export const MOVEMENT_TYPES: Record<MovementTipo, { label: string; classes: stri
   ajuste_mas: { label: 'Ajuste (+)', classes: 'bg-indigo-100 text-indigo-800' },
   ajuste_menos: { label: 'Ajuste (−)', classes: 'bg-pink-100 text-pink-800' },
   inicial: { label: 'Inventario inicial', classes: 'bg-gray-100 text-gray-800' },
+  devolucion: { label: 'Devolución', classes: 'bg-green-200 text-green-900' },
 };

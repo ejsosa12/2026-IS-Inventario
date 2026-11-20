@@ -37,6 +37,10 @@ export const routes: Routes = [
         path: 'products', loadComponent: () => import('./utils/products/products').then(p => p.Products)
       },
       {
+        // HU-13: customer returns, against a ticket. Every user
+        path: 'returns', loadComponent: () => import('./utils/returns/returns').then(r => r.Returns)
+      },
+      {
         // HU-15: the counter (any logged-in user)
         path: 'sales', loadComponent: () => import('./utils/sales/sales').then(s => s.Sales)
       },

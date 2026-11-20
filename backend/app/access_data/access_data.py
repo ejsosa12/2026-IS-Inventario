@@ -8,11 +8,20 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 # How one movement changes the stock (in SQL, on a `movements m` row): entrada,
-# ajuste_mas (HU-34) and inicial (HU-31) add; venta, dano, uso, anulacion and
-# ajuste_menos subtract.
+# ajuste_mas (HU-34), inicial (HU-31) and devolucion (HU-13) add; venta, dano, uso,
+# anulacion and ajuste_menos subtract.
 # Every stock query uses this, so a new movement type is added in one place.
-STOCK_CHANGE = ("CASE WHEN m.tipo IN ('entrada', 'ajuste_mas', 'inicial') "
+STOCK_CHANGE = ("CASE WHEN m.tipo IN ('entrada', 'ajuste_mas', 'inicial', 'devolucion') "
                 "THEN m.cantidad ELSE -m.cantidad END")
+
+
+class ReturnTooMuch(Exception):
+    """HU-13: a return asks for more than what is left to return of that sale.
+    productos: [{producto_id, vendido, devuelto, cantidad}]."""
+
+    def __init__(self, productos):
+        super().__init__("return exceeds what was sold")
+        self.productos = productos
 
 
 class InsufficientStock(Exception):
@@ -1000,7 +1009,10 @@ class AccessData:
     SALE_SELECT = """
         SELECT s.id, s.fecha, s.nit_cliente, s.nombre_cliente, s.total,
                s.usuario_id, u.nombre AS usuario,
-               (SELECT COUNT(*) FROM movements m WHERE m.venta_id = s.id) AS productos
+               (SELECT COUNT(*) FROM movements m
+                WHERE m.venta_id = s.id AND m.tipo = 'venta') AS productos,
+               (SELECT COALESCE(SUM(ROUND(m.cantidad * m.precio, 2)), 0) FROM movements m
+                WHERE m.venta_id = s.id AND m.tipo = 'devolucion') AS devuelto
         FROM sales s
         JOIN users u ON u.users = s.usuario_id
     """
@@ -1018,9 +1030,10 @@ class AccessData:
 
     def get_top_sales(self, desde=None, hasta=None):
         """HU-24: what each product sold with desde <= fecha < hasta (None = no limit).
-        Only 'venta' movements (not merma or uso interno). Most sold quantity first.
+        Only sales (not merma or uso interno), minus the returns (HU-13) made in the range.
+        Most sold quantity first.
         existencia is the current stock (STOCK_CHANGE over all its movements)."""
-        where, params = ["v.tipo = 'venta'"], {}
+        where, params = ["v.tipo IN ('venta', 'devolucion')"], {}
         if desde:
             where.append("v.fecha >= %(desde)s")
             params["desde"] = desde
@@ -1030,9 +1043,11 @@ class AccessData:
         query = f"""
             SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.stock_minimo,
                    c.nombre AS categoria,
-                   SUM(v.cantidad) AS cantidad,
-                   COUNT(DISTINCT v.venta_id) AS ventas,
-                   SUM(ROUND(v.cantidad * v.precio, 2)) AS dinero,
+                   SUM(CASE WHEN v.tipo = 'venta' THEN v.cantidad ELSE -v.cantidad END) AS cantidad,
+                   SUM(CASE WHEN v.tipo = 'devolucion' THEN v.cantidad ELSE 0 END) AS devuelto,
+                   COUNT(DISTINCT CASE WHEN v.tipo = 'venta' THEN v.venta_id END) AS ventas,
+                   SUM(CASE WHEN v.tipo = 'venta' THEN 1 ELSE -1 END
+                       * ROUND(v.cantidad * v.precio, 2)) AS dinero,
                    (SELECT COALESCE(SUM({STOCK_CHANGE}), 0)
                     FROM movements m WHERE m.producto_id = p.id) AS existencia
             FROM movements v
@@ -1040,6 +1055,7 @@ class AccessData:
             LEFT JOIN categories c ON c.id = p.categoria_id
             WHERE {" AND ".join(where)}
             GROUP BY p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.stock_minimo, c.nombre
+            HAVING ventas > 0
             ORDER BY cantidad DESC, dinero DESC, p.nombre
         """
         with self._connection() as conn:
@@ -1095,6 +1111,106 @@ class AccessData:
                 cursor.execute(query, params)
                 return cursor.fetchall()
 
+    def get_returned_money(self, desde=None, hasta=None):
+        """HU-13/HU-24: money given back to customers with desde <= fecha < hasta."""
+        where, params = ["m.tipo = 'devolucion'"], {}
+        if desde:
+            where.append("m.fecha >= %(desde)s")
+            params["desde"] = desde
+        if hasta:
+            where.append("m.fecha < %(hasta)s")
+            params["hasta"] = hasta
+        query = f"""
+            SELECT COALESCE(SUM(ROUND(m.cantidad * m.precio, 2)), 0) AS devuelto
+            FROM movements m WHERE {" AND ".join(where)}
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                return cursor.fetchone()["devuelto"]
+
+    def add_return(self, venta_id, usuario_id, items, motivo):
+        """HU-13: a customer gives back products of a sale. items: [(producto_id, Decimal
+        cantidad, danado)]. Returns the money to give back (Decimal).
+
+        One transaction. The sale row is locked, so two people cannot return the same thing
+        at once; then what is left to return is recomputed and ReturnTooMuch is raised if any
+        line asks for more. Each line is one 'devolucion' (adds stock, precio = the sale price).
+        A damaged one also gets a 'dano' of the same quantity at purchase price (decided
+        2026-11-20, option A): the stock does not change and the loss shows as a merma.
+        Both rows carry the venta_id and the same fecha.
+        """
+        with self._connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT id FROM sales WHERE id = %(id)s FOR UPDATE", {"id": venta_id})
+                    cursor.execute("""
+                        SELECT producto_id,
+                               SUM(CASE WHEN tipo = 'venta' THEN cantidad ELSE 0 END) AS vendido,
+                               SUM(CASE WHEN tipo = 'devolucion' THEN cantidad ELSE 0 END) AS devuelto,
+                               MAX(CASE WHEN tipo = 'venta' THEN precio END) AS precio
+                        FROM movements
+                        WHERE venta_id = %(id)s AND tipo IN ('venta', 'devolucion')
+                        GROUP BY producto_id
+                    """, {"id": venta_id})
+                    sold = {row["producto_id"]: row for row in cursor.fetchall()}
+                    problems = [
+                        {"producto_id": pid, "vendido": sold[pid]["vendido"],
+                         "devuelto": sold[pid]["devuelto"], "cantidad": cantidad}
+                        for pid, cantidad, _ in items
+                        if cantidad > sold[pid]["vendido"] - sold[pid]["devuelto"]
+                    ]
+                    if problems:
+                        raise ReturnTooMuch(problems)
+
+                    cursor.execute("SELECT NOW() AS ahora")
+                    now = cursor.fetchone()["ahora"]
+                    note = f"Devolución dañada (venta #{venta_id})"
+                    if motivo:
+                        note += f": {motivo}"
+                    total = Decimal(0)
+                    for pid, cantidad, danado in items:
+                        precio = sold[pid]["precio"]
+                        total += (cantidad * precio).quantize(Decimal("0.01"))
+                        cursor.execute("""
+                            INSERT INTO movements (tipo, cantidad, precio, motivo, fecha, producto_id,
+                                                   usuario_id, venta_id)
+                            VALUES ('devolucion', %s, %s, %s, %s, %s, %s, %s)
+                        """, (cantidad, precio, motivo, now, pid, usuario_id, venta_id))
+                        if danado:
+                            cursor.execute("""
+                                INSERT INTO movements (tipo, cantidad, precio, motivo, fecha,
+                                                       producto_id, usuario_id, venta_id)
+                                VALUES ('dano', %s, %s, %s, %s, %s, %s, %s)
+                            """, (cantidad, self._last_purchase_price(cursor, pid), note, now, pid,
+                                  usuario_id, venta_id))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            return total
+
+    def get_returns(self, limit=50):
+        """HU-13: the latest returns (one row per product), newest first. danado = a 'dano'
+        of the same sale, product and moment was registered with it."""
+        query = """
+            SELECT d.id, d.fecha, d.venta_id, d.producto_id, p.codigo, p.nombre, p.unidad_base,
+                   d.cantidad, d.precio, d.motivo, u.nombre AS usuario,
+                   EXISTS (SELECT 1 FROM movements x
+                           WHERE x.tipo = 'dano' AND x.venta_id = d.venta_id
+                             AND x.producto_id = d.producto_id AND x.fecha = d.fecha) AS danado
+            FROM movements d
+            JOIN products p ON p.id = d.producto_id
+            JOIN users u ON u.users = d.usuario_id
+            WHERE d.tipo = 'devolucion'
+            ORDER BY d.fecha DESC, d.id DESC
+            LIMIT %(limit)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"limit": limit})
+                return cursor.fetchall()
+
     def get_sale(self, sale_id):
         """A sale with its products (key 'items'), or None if it does not exist."""
         with self._connection() as conn:
@@ -1104,7 +1220,10 @@ class AccessData:
                 if sale is None:
                     return None
                 cursor.execute("""
-                    SELECT m.producto_id, p.codigo, p.nombre, p.unidad_base, m.cantidad, m.precio
+                    SELECT m.producto_id, p.codigo, p.nombre, p.unidad_base, m.cantidad, m.precio,
+                           (SELECT COALESCE(SUM(d.cantidad), 0) FROM movements d
+                            WHERE d.venta_id = m.venta_id AND d.producto_id = m.producto_id
+                              AND d.tipo = 'devolucion') AS devuelto
                     FROM movements m
                     JOIN products p ON p.id = m.producto_id
                     WHERE m.venta_id = %(id)s AND m.tipo = 'venta'
@@ -1637,7 +1756,7 @@ class AccessData:
     # ------------------------------------------------------------
 
     MOVEMENT_TYPES = ("entrada", "venta", "dano", "uso", "anulacion", "ajuste_mas", "ajuste_menos",
-                      "inicial")
+                      "inicial", "devolucion")
 
     @staticmethod
     def _movement_filters(desde, hasta, tipo, usuario_id, skip=()):

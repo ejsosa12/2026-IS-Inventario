@@ -78,7 +78,13 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p class="text-sm font-medium text-gray-600">Vendido</p>
           <p class="text-3xl font-bold text-gray-900 mt-2">Q{{ r.resumen.dinero | number: '1.2-2' }}</p>
-          <p class="text-sm text-gray-500 mt-1">IVA incluido</p>
+          <p class="text-sm text-gray-500 mt-1">
+            IVA incluido
+            <!-- HU-13: returns in the range are subtracted -->
+            @if (r.resumen.devuelto > 0) {
+              · Q{{ r.resumen.vendido | number: '1.2-2' }} − Q{{ r.resumen.devuelto | number: '1.2-2' }} devuelto
+            }
+          </p>
         </div>
       </div>
 
@@ -100,7 +106,7 @@
               @if (loading()) { <span class="text-sm font-normal text-gray-500">Cargando...</span> }
             </h3>
             <p class="text-sm text-gray-600">
-              Solo ventas (no cuenta mermas ni uso interno)
+              Solo ventas, menos lo devuelto (no cuenta mermas ni uso interno)
               @if (lowCount()) {
                 · <span class="text-red-700 font-medium">{{ lowCount() }} ya {{ lowCount() === 1 ? 'está' : 'están' }} en su mínimo o debajo</span>
               }
@@ -178,6 +184,10 @@
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                     {{ amount(p.cantidad, p.unidad_base) }}
                     <span class="font-normal text-xs text-gray-500">{{ pres(p.id, p.cantidad) }}</span>
+                    <!-- HU-13 -->
+                    @if (p.devuelto > 0) {
+                      <div class="font-normal text-xs text-red-700">{{ amount(p.devuelto, p.unidad_base) }} devuelto</div>
+                    }
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ p.ventas }}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Q{{ p.dinero | number: '1.2-2' }}</td>

@@ -16,6 +16,8 @@ export interface SaleItem {
   cantidad: number;
   precio: number; // sale price per base unit at the moment of the sale
   subtotal: number;
+  devuelto: number; // HU-13: already returned
+  por_devolver: number; // HU-13: what can still be returned
 }
 
 export interface Sale {
@@ -28,6 +30,7 @@ export interface Sale {
   productos: number;
   total: number; // IVA included
   iva: number; // the IVA inside the total
+  devuelto: number; // HU-13: money already given back for returns
   items?: SaleItem[]; // only in GET /sales/<id> and add-sale
 }
 
@@ -44,4 +47,44 @@ export interface SaleStockProblem {
   nombre: string;
   unidad_base: UnidadBase;
   existencia: number;
+}
+
+// HU-13: what the counter sends to POST /api/v1/add-return
+export interface NewReturn {
+  venta_id: number;
+  motivo: string;
+  items: { producto_id: number; cantidad: number; danado: boolean }[];
+}
+
+export interface ReturnResult {
+  venta_id: number;
+  devolver: number; // money to give back to the customer
+  venta: Sale; // the sale again, with what is left to return
+}
+
+// HU-13: one returned product (GET /api/v1/returns)
+export interface ReturnRow {
+  id: number;
+  fecha: string;
+  venta_id: number;
+  producto_id: number;
+  codigo: string;
+  nombre: string;
+  unidad_base: UnidadBase;
+  cantidad: number;
+  precio: number;
+  monto: number;
+  danado: boolean; // came damaged: registered and written off as a merma
+  motivo: string | null;
+  usuario: string;
+}
+
+// 409 from add-return: someone returned part of it meanwhile
+export interface ReturnProblem {
+  producto_id: number;
+  nombre: string;
+  unidad_base: UnidadBase;
+  vendido: number;
+  devuelto: number;
+  por_devolver: number;
 }

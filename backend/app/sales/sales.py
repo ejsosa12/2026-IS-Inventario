@@ -10,7 +10,7 @@ import re
 
 from flask import Blueprint, g, request
 
-from app.access_data import AccessData, NegativeStock
+from app.access_data import AccessData, NegativeStock, ReturnTooMuch
 from app.catalog.catalog import _to_decimal
 from app.security import requiere_rol
 
@@ -97,6 +97,8 @@ def _sale_to_json(sale):
         "usuario": sale["usuario"],
         "productos": sale["productos"],
         "total": float(total),
+        # HU-13: money already given back for returns of this sale
+        "devuelto": float(sale["devuelto"]),
         # The IVA already inside the total: total - total / 1.12
         "iva": float((total - total / (1 + IVA)).quantize(TWO_DECIMALS)),
     }
@@ -109,6 +111,9 @@ def _sale_to_json(sale):
             "cantidad": float(item["cantidad"]),
             "precio": float(item["precio"]),
             "subtotal": float((item["cantidad"] * item["precio"]).quantize(TWO_DECIMALS)),
+            # HU-13: already returned and what can still be returned
+            "devuelto": float(item["devuelto"]),
+            "por_devolver": float(item["cantidad"] - item["devuelto"]),
         } for item in sale["items"]]
     return data
 
@@ -232,7 +237,8 @@ def _top_sale_to_json(row):
         "categoria": row["categoria"],
         "unidad_base": row["unidad_base"],
         "activo": bool(row["activo"]),
-        "cantidad": float(row["cantidad"]),
+        "cantidad": float(row["cantidad"]),  # sold minus returned (HU-13)
+        "devuelto": float(row["devuelto"]),
         "ventas": row["ventas"],
         "dinero": float(row["dinero"]),
         "existencia": existencia,
@@ -261,6 +267,8 @@ def get_top_sales():
     access = AccessData()
     productos = [_top_sale_to_json(row) for row in access.get_top_sales(start, end)]
     por_dia = _sales_per_day(access, desde, hasta)
+    vendido = round(sum(d["total"] for d in por_dia), 2)
+    devuelto = float(access.get_returned_money(start, end))
 
     return {
         "status": 0,
@@ -271,7 +279,10 @@ def get_top_sales():
             "resumen": {
                 "productos": len(productos),
                 "ventas": sum(d["ventas"] for d in por_dia),
-                "dinero": round(sum(d["total"] for d in por_dia), 2),
+                # Tickets minus the money given back for returns in the range (HU-13)
+                "dinero": round(vendido - devuelto, 2),
+                "vendido": vendido,
+                "devuelto": devuelto,
             },
             "productos": productos,
             "por_dia": por_dia,
@@ -373,4 +384,107 @@ def get_stale_products():
             },
             "productos": productos,
         },
+    }, 200
+
+
+RETURN_MOTIVO_MAX = 150  # leaves room for "Devolución dañada (venta #N): " in the merma motivo
+
+
+@sales.route('api/v1/add-return', methods=['POST'])
+@requiere_rol()  # HU-13: Kevin and Byron receive the returns at the counter
+def add_return():
+    """HU-13 "Recibir una devolución": {venta_id, motivo, items: [{producto_id, cantidad, danado}]}.
+    Only products of that sale, never more than what is left to return (decided 2026-11-20:
+    the ticket is required, no time limit). A good one goes back to the shelf; a damaged one
+    is registered and also written off as a merma, so it does not add."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return _error("return data is required")
+    venta_id = body.get("venta_id")
+    if not isinstance(venta_id, int) or isinstance(venta_id, bool):
+        return _error("venta_id is required")
+    motivo = re.sub(r"\s+", " ", str(body.get("motivo") or "")).strip() or None
+    if motivo and len(motivo) > RETURN_MOTIVO_MAX:
+        return _error(f"motivo must have at most {RETURN_MOTIVO_MAX} characters")
+
+    access = AccessData()
+    sale = access.get_sale(venta_id)
+    if sale is None:
+        return _error("sale does not exist", 404)
+    sold = {item["producto_id"]: item for item in sale["items"]}
+
+    raw_items = body.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return _error("at least one product is required")
+    items, seen = [], set()
+    for raw in raw_items:
+        producto_id = raw.get("producto_id") if isinstance(raw, dict) else None
+        if producto_id not in sold:
+            return _error("every product must belong to the sale")
+        if producto_id in seen:
+            return _error("a product can only appear once")
+        seen.add(producto_id)
+        danado = raw.get("danado", False)
+        if not isinstance(danado, bool):
+            return _error("danado must be true or false")
+        cantidad = _to_decimal(raw.get("cantidad"))
+        if cantidad is None or cantidad <= 0:
+            return _error("cantidad must be greater than 0")
+        if cantidad != cantidad.quantize(CANTIDAD_DECIMALES):
+            return _error("cantidad can have at most 3 decimals")
+        # HU-07: products sold by unit come back whole
+        if sold[producto_id]["unidad_base"] == "unidad" and cantidad != cantidad.to_integral_value():
+            return _error("cantidad must be a whole number for products sold by unit")
+        items.append((producto_id, cantidad, danado))
+
+    try:
+        devolver = access.add_return(venta_id, g.user["users"], items, motivo)
+    except ReturnTooMuch as problem:
+        # Someone returned part of it meanwhile (or the client asked for more than bought)
+        return {
+            "status": 1,
+            "message": "return exceeds what was sold",
+            "data": {"productos": [{
+                "producto_id": p["producto_id"],
+                "nombre": sold[p["producto_id"]]["nombre"],
+                "unidad_base": sold[p["producto_id"]]["unidad_base"],
+                "vendido": float(p["vendido"]),
+                "devuelto": float(p["devuelto"]),
+                "por_devolver": float(p["vendido"] - p["devuelto"]),
+            } for p in problem.productos]},
+        }, 409
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: return saved",
+        "data": {
+            "venta_id": venta_id,
+            "devolver": float(devolver),  # money to give back to the customer
+            "venta": _sale_to_json(access.get_sale(venta_id)),
+        },
+    }, 201
+
+
+@sales.route('api/v1/returns', methods=['GET'])
+@requiere_rol()
+def get_returns():
+    """HU-13: the latest 50 returned products, newest first."""
+    return {
+        "status": 0,
+        "message": "SUCCESS: returns",
+        "data": [{
+            "id": row["id"],
+            "fecha": row["fecha"].isoformat(),
+            "venta_id": row["venta_id"],
+            "producto_id": row["producto_id"],
+            "codigo": row["codigo"],
+            "nombre": row["nombre"],
+            "unidad_base": row["unidad_base"],
+            "cantidad": float(row["cantidad"]),
+            "precio": float(row["precio"]),
+            "monto": float((row["cantidad"] * row["precio"]).quantize(TWO_DECIMALS)),
+            "danado": bool(row["danado"]),
+            "motivo": row["motivo"],
+            "usuario": row["usuario"],
+        } for row in AccessData().get_returns()],
     }, 200
