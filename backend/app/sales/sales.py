@@ -334,6 +334,11 @@ def get_dashboard_summary():
             "hasta": hasta.isoformat(),
             "por_dia": _sales_per_day(access, desde, hasta),
             "pendientes": pendientes,
+            # Card "Productos en existencia": stock > 0, inactive ones too (same rows as the money)
+            "productos_existencia": len(stock),
+            "productos_registrados": len(access.get_products()),
+            # Card "Ventas del mes": from the 1st to today, and the same days of last month
+            "mes": _month_sales(access, hasta),
             # The dashboard's three lists (decided 2026-11-20: every user, no purchase prices)
             "mas_vendidos": _dashboard_top(access, desde, hasta),
             "ultimas_ventas": [
@@ -348,6 +353,33 @@ def get_dashboard_summary():
 
 
 DASHBOARD_ROWS = 4
+
+
+def _month_sales(access, today):
+    """Tickets and money (tickets' total) from the 1st of this month to today, and of the same
+    days of last month (1–20 Oct when today is 20 Nov; a short month stops at its last day)."""
+    def totals(first, last):
+        rows = access.get_sales_by_day(
+            datetime.combine(first, time.min), datetime.combine(last + timedelta(days=1), time.min)
+        )
+        return sum(r["ventas"] for r in rows), float(sum((r["total"] for r in rows), Decimal(0)))
+
+    first = today.replace(day=1)
+    prev_last_day = first - timedelta(days=1)  # last day of last month
+    prev_first = prev_last_day.replace(day=1)
+    prev_last = prev_first.replace(day=min(today.day, prev_last_day.day))
+    ventas, dinero = totals(first, today)
+    ventas_anterior, dinero_anterior = totals(prev_first, prev_last)
+    return {
+        "desde": first.isoformat(),
+        "hasta": today.isoformat(),
+        "ventas": ventas,
+        "dinero": dinero,
+        "anterior_desde": prev_first.isoformat(),
+        "anterior_hasta": prev_last.isoformat(),
+        "ventas_anterior": ventas_anterior,
+        "dinero_anterior": dinero_anterior,
+    }
 
 
 def _dashboard_top(access, desde, hasta):

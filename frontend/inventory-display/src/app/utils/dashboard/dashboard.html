@@ -146,16 +146,24 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600">Total Orders</p>
-                            <!-- Add here total sales of the month  -->
-                            <p class="text-3xl font-bold text-gray-900 mt-2">2,847</p>
-                            <div class="flex items-center mt-2">
-                                <span class="text-green-600 text-sm font-medium flex items-center">
-                                    <i class="fas fa-arrow-up mr-1"></i>
-                                    15%
-                                </span>
-                                <span class="text-gray-500 text-sm ml-2">vs last month</span>
-                            </div>
+                            <!-- HU-15: tickets from the 1st of this month to today, vs the same days of last month -->
+                            <p class="text-sm font-medium text-gray-600">Ventas del mes</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2">
+                                @if (month(); as m) { {{ m.ventas | number }} } @else { — }
+                            </p>
+                            @if (month(); as m) {
+                                <p class="text-gray-500 text-sm mt-2">Q{{ m.dinero | number: '1.2-2' }} vendidos</p>
+                                <div class="flex items-center mt-1" [title]="'Del ' + dateTime(m.anterior_desde).slice(0, 5) + ' al ' + dateTime(m.anterior_hasta).slice(0, 5) + ': ' + m.ventas_anterior + ' ventas'">
+                                    @if (monthChange() !== null) {
+                                        <span class="text-sm font-medium" [class]="monthChange()! >= 0 ? 'text-green-600' : 'text-red-600'">
+                                            {{ monthChange()! > 0 ? '+' : '' }}{{ monthChange() }} %
+                                        </span>
+                                        <span class="text-gray-500 text-sm ml-2">vs mes pasado</span>
+                                    } @else {
+                                        <span class="text-gray-500 text-sm">Sin ventas el mes pasado</span>
+                                    }
+                                </div>
+                            }
                         </div>
                         <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-shopping-cart text-orange-600 text-xl"></i>
@@ -167,16 +175,14 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600">Products</p>
-                            <!-- Add here the total productos of that exists of the inventory -->
-                            <p class="text-3xl font-bold text-gray-900 mt-2">1,247</p>
-                            <div class="flex items-center mt-2">
-                                <span class="text-green-600 text-sm font-medium flex items-center">
-                                    <i class="fas fa-arrow-up mr-1"></i>
-                                    5%
-                                </span>
-                                <span class="text-gray-500 text-sm ml-2">vs last month</span>
-                            </div>
+                            <!-- Products with stock > 0, inactive ones too (the merchandise is still there) -->
+                            <p class="text-sm font-medium text-gray-600">Productos en existencia</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2">
+                                @if (productCounts(); as c) { {{ c.existencia | number }} } @else { — }
+                            </p>
+                            @if (productCounts(); as c) {
+                                <p class="text-gray-500 text-sm mt-2">de {{ c.registrados | number }} registrados</p>
+                            }
                         </div>
                         <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                             <i class="fas fa-box text-purple-600 text-xl"></i>

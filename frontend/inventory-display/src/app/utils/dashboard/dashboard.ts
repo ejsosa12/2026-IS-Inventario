@@ -6,7 +6,7 @@ import { DataServices } from '../../core/services/data-services';
 import { injectPresentations } from '../../core/utils/two-units';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
-import { DashboardActivity, DashboardPending, DashboardTopProduct, SalesDay } from '../../models/report';
+import { DashboardActivity, DashboardMonth, DashboardPending, DashboardTopProduct, SalesDay } from '../../models/report';
 import { Sale } from '../../models/sale';
 import { MovementTipo } from '../../models/movement';
 import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
@@ -116,6 +116,17 @@ export class Dashboard {
   latestSales = signal<Sale[] | null>(null);
   activity = signal<DashboardActivity[] | null>(null);
 
+  // Cards "Ventas del mes" and "Productos en existencia" (null = loading)
+  month = signal<DashboardMonth | null>(null);
+  productCounts = signal<{ existencia: number; registrados: number } | null>(null);
+
+  // Tickets of this month vs the same days of last month, in % (null = nothing to compare)
+  monthChange = computed(() => {
+    const m = this.month();
+    if (!m || m.ventas_anterior === 0) return null;
+    return Math.round(((m.ventas - m.ventas_anterior) / m.ventas_anterior) * 100);
+  });
+
   // "Pendientes": what someone has to sort out (null = loading)
   pending = signal<DashboardPending | null>(null);
   nothingPending = computed(() => {
@@ -157,6 +168,11 @@ export class Dashboard {
         this.latestSales.set(summary.ultimas_ventas);
         this.activity.set(summary.ultimos_movimientos);
         this.pending.set(summary.pendientes);
+        this.month.set(summary.mes);
+        this.productCounts.set({
+          existencia: summary.productos_existencia,
+          registrados: summary.productos_registrados,
+        });
       },
       error: () => this.salesError.set('No se pudieron cargar las ventas'),
     });

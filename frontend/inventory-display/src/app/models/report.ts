@@ -74,9 +74,24 @@ export interface DashboardSummary {
   hasta: string;
   por_dia: SalesDay[];
   pendientes: DashboardPending;
+  productos_existencia: number; // stock > 0, inactive ones too
+  productos_registrados: number;
+  mes: DashboardMonth;
   mas_vendidos: DashboardTopProduct[]; // the 4 most sold of those days
   ultimas_ventas: Sale[]; // the 4 latest sales
   ultimos_movimientos: DashboardActivity[]; // the 4 latest movements
+}
+
+// "Ventas del mes": 1st of the month to today, and the same days of last month
+export interface DashboardMonth {
+  desde: string;
+  hasta: string;
+  ventas: number;
+  dinero: number;
+  anterior_desde: string;
+  anterior_hasta: string;
+  ventas_anterior: number;
+  dinero_anterior: number;
 }
 
 // The "Pendientes" box (out of stock comes from low-stock)
