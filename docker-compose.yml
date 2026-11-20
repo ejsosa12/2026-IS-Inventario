@@ -8,6 +8,8 @@ services:
       MARIADB_DATABASE: inventory
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
+      # Guatemala time (UTC-6), so NOW()/CURRENT_TIMESTAMP are local, not UTC
+      TZ: America/Guatemala
     volumes:
       # Data survives `docker compose down`; only `down -v` deletes it
       - db_data:/var/lib/mysql
@@ -34,6 +36,8 @@ services:
       FLASK_KEY: ${FLASK_KEY}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8}
+      # Same zone as the db, so date.today() ("Ventas de hoy", reports) changes day at local midnight
+      TZ: America/Guatemala
     # No "ports": Flask is only reachable inside the Docker network, through nginx
     depends_on:
       db:

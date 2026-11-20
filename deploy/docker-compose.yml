@@ -10,6 +10,8 @@ services:
       MARIADB_DATABASE: inventory
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
+      # Guatemala time (UTC-6), so NOW()/CURRENT_TIMESTAMP are local, not UTC
+      TZ: America/Guatemala
     volumes:
       - db_data:/var/lib/mysql
       # The dump copied by hand with scp; it only runs while db_data is empty
@@ -33,6 +35,8 @@ services:
       FLASK_KEY: ${FLASK_KEY}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8}
+      # Same zone as the db, so date.today() ("Ventas de hoy", reports) changes day at local midnight
+      TZ: America/Guatemala
     # No "ports" either: only nginx can reach it, through the Docker network
     depends_on:
       db:
