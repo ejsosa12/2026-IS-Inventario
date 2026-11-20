@@ -1,0 +1,58 @@
+<!-- HU-24: one bar per day; the line above says what the hovered bar is -->
+<div>
+  <p class="text-sm text-gray-600 h-5" aria-live="polite">
+    @if (hovered(); as d) {
+      <strong class="text-gray-900">{{ long(d.fecha) }}</strong> ·
+      {{ d.ventas }} {{ d.ventas === 1 ? 'venta' : 'ventas' }} ·
+      <strong class="text-gray-900">Q{{ d.total | number: '1.2-2' }}</strong>
+    } @else {
+      {{ totals().ventas }} {{ totals().ventas === 1 ? 'venta' : 'ventas' }} ·
+      Q{{ totals().total | number: '1.2-2' }} en total
+      <span class="text-gray-400">· pase el cursor sobre una barra</span>
+    }
+  </p>
+
+  <div class="flex mt-3">
+    <!-- Y axis -->
+    <div class="w-16 h-56 pr-2 flex flex-col justify-between text-right text-xs text-gray-400">
+      <span>{{ axis(scaleMax()) }}</span>
+      <span>{{ axis(scaleMax() / 2) }}</span>
+      <span>Q0</span>
+    </div>
+
+    <div class="relative flex-1 h-56 border-l border-b border-gray-300">
+      <!-- Grid lines at the top and the middle -->
+      <div class="absolute left-0 right-0 top-0 border-t border-dashed border-gray-200"></div>
+      <div class="absolute left-0 right-0 top-1/2 border-t border-dashed border-gray-200"></div>
+
+      <div class="absolute inset-0 flex items-end gap-px px-1">
+        @for (d of days(); track d.fecha) {
+          <div class="flex-1 h-full flex items-end cursor-default outline-none" tabindex="0"
+               [attr.aria-label]="long(d.fecha) + ': Q' + (d.total | number: '1.2-2')"
+               (mouseenter)="hovered.set(d)" (mouseleave)="hovered.set(null)"
+               (focus)="hovered.set(d)" (blur)="hovered.set(null)">
+            <div class="w-full rounded-t transition-colors"
+                 [class]="hovered() === d ? 'bg-blue-800' : 'bg-blue-500'"
+                 [style.height.%]="height(d)"
+                 [style.min-height.px]="d.total > 0 ? 2 : 0"></div>
+          </div>
+        }
+      </div>
+
+      @if (empty()) {
+        <p class="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+          No hubo ventas en estas fechas
+        </p>
+      }
+    </div>
+  </div>
+
+  <!-- X axis: a date under every few bars -->
+  <div class="flex ml-16 px-1 gap-px mt-1">
+    @for (d of days(); track d.fecha; let i = $index) {
+      <span class="flex-1 text-center text-xs text-gray-400 whitespace-nowrap overflow-visible">
+        {{ i % labelEvery() === 0 ? short(d.fecha) : '' }}
+      </span>
+    }
+  </div>
+</div>

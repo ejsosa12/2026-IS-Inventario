@@ -1,0 +1,213 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cordes Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<div class="min-h-screen bg-gray-400">
+
+  <!-- Top Header -->
+  <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="px-6 pt-4">
+      <h1 class="text-2xl font-semibold text-gray-900">Análisis</h1>
+      <p class="text-gray-600 text-sm mt-1">Qué es lo que más sale, para nunca quedarse sin eso</p>
+      <!-- Tabs of Análisis -->
+      <nav class="mt-4 flex gap-6 text-sm">
+        <a routerLink="/content/reports" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">Valor del inventario</a>
+        <a routerLink="/content/reports/movements" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">Movimientos</a>
+        <a routerLink="/content/reports/top-sales" class="pb-3 border-b-2 border-blue-800 text-blue-800 font-medium">Más vendidos</a>
+        <!-- HU-25 -->
+        <a routerLink="/content/reports/stale" class="pb-3 border-b-2 border-transparent text-gray-600 hover:text-gray-900">No se mueve</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="p-6 space-y-6">
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-4 space-y-3">
+      <form (submit)="$event.preventDefault(); search()" class="flex flex-wrap items-end gap-4">
+        <div>
+          <label for="desde" class="block text-xs font-medium text-gray-600 mb-1">Desde</label>
+          <input id="desde" type="date" [value]="draftDesde()" (input)="draftDesde.set($any($event.target).value)"
+                 class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="hasta" class="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+          <input id="hasta" type="date" [value]="draftHasta()" (input)="draftHasta.set($any($event.target).value)"
+                 class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button type="submit" [disabled]="!!dateProblem()"
+                class="px-4 py-2 bg-blue-800 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50">
+          Buscar
+        </button>
+      </form>
+      @if (dateProblem()) {
+        <p class="text-xs text-red-600">{{ dateProblem() }}</p>
+      }
+      <div class="flex flex-wrap items-center gap-2">
+        @for (s of shortcuts; track s.value) {
+          <button type="button" (click)="useShortcut(s.value)"
+                  class="px-3 py-1 text-sm rounded-full border transition-colors"
+                  [class]="activeShortcut() === s.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-800 font-medium'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'">
+            {{ s.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (error()) {
+      <p class="px-4 py-3 rounded-lg bg-red-100 text-red-800 text-sm font-medium">{{ error() }}</p>
+    }
+
+    @if (report(); as r) {
+      <!-- Summary -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <p class="text-sm font-medium text-gray-600">Productos vendidos</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">{{ r.resumen.productos }}</p>
+          <p class="text-sm text-gray-500 mt-1">distintos</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <p class="text-sm font-medium text-gray-600">Ventas</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">{{ r.resumen.ventas }}</p>
+          <p class="text-sm text-gray-500 mt-1">tickets</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <p class="text-sm font-medium text-gray-600">Vendido</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">Q{{ r.resumen.dinero | number: '1.2-2' }}</p>
+          <p class="text-sm text-gray-500 mt-1">IVA incluido</p>
+        </div>
+      </div>
+
+      <!-- Sales per day (only with a date range: "Todo" has no fixed days) -->
+      @if (r.desde && r.hasta) {
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 class="text-lg font-semibold text-gray-900">Ventas por día</h3>
+          <p class="text-sm text-gray-600 mb-2">Del {{ shortDate(r.desde) }} al {{ shortDate(r.hasta) }}</p>
+          <app-sales-chart [days]="r.por_dia" />
+        </div>
+      }
+
+      <!-- Products, most sold first -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">
+              Lo que más se vende
+              @if (loading()) { <span class="text-sm font-normal text-gray-500">Cargando...</span> }
+            </h3>
+            <p class="text-sm text-gray-600">
+              Solo ventas (no cuenta mermas ni uso interno)
+              @if (lowCount()) {
+                · <span class="text-red-700 font-medium">{{ lowCount() }} ya {{ lowCount() === 1 ? 'está' : 'están' }} en su mínimo o debajo</span>
+              }
+            </p>
+          </div>
+          <!-- HU-05 -->
+          <select aria-label="Filtrar por categoría"
+                  [value]="category()" (change)="category.set($any($event.target).value)"
+                  class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            <option value="">Todas las categorías</option>
+            @for (name of categories(); track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('nombre')">
+                  <button type="button" (click)="sortBy('nombre')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Producto <i [class]="sortIcon('nombre')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('categoria')">
+                  <button type="button" (click)="sortBy('categoria')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Categoría <i [class]="sortIcon('categoria')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('cantidad')">
+                  <button type="button" (click)="sortBy('cantidad')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Vendido <i [class]="sortIcon('cantidad')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('ventas')">
+                  <button type="button" (click)="sortBy('ventas')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Ventas <i [class]="sortIcon('ventas')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('dinero')">
+                  <button type="button" (click)="sortBy('dinero')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Dinero <i [class]="sortIcon('dinero')"></i>
+                  </button>
+                </th>
+                <th class="px-6 py-3 text-left" [attr.aria-sort]="ariaSort('existencia')">
+                  <button type="button" (click)="sortBy('existencia')"
+                          class="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-900">
+                    Hay ahora <i [class]="sortIcon('existencia')"></i>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              @for (p of shown(); track p.id) {
+                <tr class="hover:bg-gray-50" [class.opacity-60]="!p.activo">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-500">{{ rank().get(p.id) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <!-- HU-20: its kárdex -->
+                    <a [routerLink]="['/content/products/history', p.id]" class="text-sm font-medium text-blue-800 hover:underline">
+                      {{ p.nombre }}
+                    </a>
+                    <div class="text-sm text-gray-500">
+                      {{ p.codigo }}
+                      @if (!p.activo) { · <span class="text-xs">Inactivo</span> }
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ categoryName(p) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    {{ amount(p.cantidad, p.unidad_base) }}
+                    <span class="font-normal text-xs text-gray-500">{{ pres(p.id, p.cantidad) }}</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ p.ventas }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Q{{ p.dinero | number: '1.2-2' }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span [class]="p.existencia <= 0 ? 'text-red-600 font-semibold' : 'text-gray-900'">
+                      {{ amount(p.existencia, p.unidad_base) }}
+                    </span>
+                    <span class="text-xs text-gray-500">{{ pres(p.id, p.existencia) }}</span>
+                    <!-- "para nunca quedarme sin eso": same rule as HU-22 -->
+                    @if (p.existencia <= 0) {
+                      <span class="ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Agotado</span>
+                    } @else if (p.bajo_minimo) {
+                      <span class="ml-2 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Por acabarse</span>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">
+                    @if (category()) { No se vendió nada de esa categoría en estas fechas }
+                    @else { No hubo ventas en estas fechas }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else if (loading()) {
+      <p class="text-sm text-gray-700">Cargando...</p>
+    }
+  </main>
+</div>

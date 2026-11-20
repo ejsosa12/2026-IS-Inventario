@@ -1016,6 +1016,85 @@ class AccessData:
                 cursor.execute(query, {"desde": desde, "hasta": hasta, "limit": limit})
                 return cursor.fetchall()
 
+    def get_top_sales(self, desde=None, hasta=None):
+        """HU-24: what each product sold with desde <= fecha < hasta (None = no limit).
+        Only 'venta' movements (not merma or uso interno). Most sold quantity first.
+        existencia is the current stock (STOCK_CHANGE over all its movements)."""
+        where, params = ["v.tipo = 'venta'"], {}
+        if desde:
+            where.append("v.fecha >= %(desde)s")
+            params["desde"] = desde
+        if hasta:
+            where.append("v.fecha < %(hasta)s")
+            params["hasta"] = hasta
+        query = f"""
+            SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.stock_minimo,
+                   c.nombre AS categoria,
+                   SUM(v.cantidad) AS cantidad,
+                   COUNT(DISTINCT v.venta_id) AS ventas,
+                   SUM(ROUND(v.cantidad * v.precio, 2)) AS dinero,
+                   (SELECT COALESCE(SUM({STOCK_CHANGE}), 0)
+                    FROM movements m WHERE m.producto_id = p.id) AS existencia
+            FROM movements v
+            JOIN products p ON p.id = v.producto_id
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            WHERE {" AND ".join(where)}
+            GROUP BY p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.stock_minimo, c.nombre
+            ORDER BY cantidad DESC, dinero DESC, p.nombre
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                return cursor.fetchall()
+
+    def get_stale_products(self, desde):
+        """HU-25: products with stock that sold nothing since `desde` (or never) and that have
+        been in the store at least since then (first movement before desde), so what arrived
+        recently is not counted as "not moving" (decided 2026-11-20, option A).
+        Inactive products count too: the merchandise is still on the shelf."""
+        query = f"""
+            SELECT p.id, p.codigo, p.nombre, p.unidad_base, p.activo, p.precio_compra,
+                   c.nombre AS categoria, x.existencia, x.ultima_venta, x.primer_movimiento
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.categoria_id
+            JOIN (
+                SELECT m.producto_id,
+                       SUM({STOCK_CHANGE}) AS existencia,
+                       MAX(CASE WHEN m.tipo = 'venta' THEN m.fecha END) AS ultima_venta,
+                       MIN(m.fecha) AS primer_movimiento
+                FROM movements m
+                GROUP BY m.producto_id
+            ) x ON x.producto_id = p.id
+            WHERE x.existencia > 0
+              AND (x.ultima_venta IS NULL OR x.ultima_venta < %(desde)s)
+              AND x.primer_movimiento < %(desde)s
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, {"desde": desde})
+                return cursor.fetchall()
+
+    def get_sales_by_day(self, desde=None, hasta=None):
+        """HU-24: number of sales and money (tickets' total) per day, oldest first."""
+        where, params = ["1 = 1"], {}
+        if desde:
+            where.append("fecha >= %(desde)s")
+            params["desde"] = desde
+        if hasta:
+            where.append("fecha < %(hasta)s")
+            params["hasta"] = hasta
+        query = f"""
+            SELECT DATE(fecha) AS dia, COUNT(*) AS ventas, SUM(total) AS total
+            FROM sales
+            WHERE {" AND ".join(where)}
+            GROUP BY DATE(fecha)
+            ORDER BY dia
+        """
+        with self._connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                return cursor.fetchall()
+
     def get_sale(self, sale_id):
         """A sale with its products (key 'items'), or None if it does not exist."""
         with self._connection() as conn:

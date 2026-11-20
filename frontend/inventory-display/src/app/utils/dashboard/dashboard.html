@@ -39,6 +39,9 @@
                     </div>
                     <div class="flex items-center space-x-4">
                         <div class="relative">
+                          <div class="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                            <i class="fas fa-cube text-2xl"></i>
+                          </div>
                         </div>
                     </div>
                 </div>
@@ -86,6 +89,7 @@
 
         <!-- Main Dashboard Content -->
         <main class="p-6">
+
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <!-- Revenue Card -->
@@ -94,7 +98,7 @@
                         <div>
                           <!-- -->
                             <!-- Add here total value of inventory-->
-                          <!-- HU-26: stock × purchase price. Employees do not see money (HU-29) -->
+                          <!-- HU-26: stock × purchase price. Every user sees it (decided 2026-11-20) -->
                           <p class="text-sm font-medium text-gray-600">Dinero en Bodega</p>
                           <p class="text-3xl font-bold text-gray-900 mt-2">
                             @if (inventoryValue() !== null) {
@@ -180,22 +184,40 @@
 
             <!-- Charts Row -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <!-- Revenue Chart -->
+
+                <!-- Add new graph from sale here HU-24 -->
+                <!-- HU-24: money sold per day. Every user sees it (decided 2026-11-20) -->
                 <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center justify-between mb-4">
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Revenue Analytics</h3>
-                            <p class="text-gray-600 text-sm">Monthly revenue overview</p>
+                            <h3 class="text-lg font-semibold text-gray-900">Ventas</h3>
+                            <p class="text-gray-600 text-sm">Lo vendido cada día</p>
                         </div>
                         <div class="flex items-center space-x-2">
-                            <button class="px-3 py-1 text-sm bg-cordes-blue text-white rounded-md">6M</button>
-                            <button class="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-md">1Y</button>
+                            @for (n of chartRanges; track n) {
+                                <button type="button" (click)="setChartDays(n)"
+                                        class="px-3 py-1 text-sm rounded-md"
+                                        [class]="chartDays() === n ? 'bg-blue-800 text-white' : 'text-gray-600 hover:bg-gray-100'">
+                                    {{ n }} días
+                                </button>
+                            }
                         </div>
                     </div>
-                    <div class="h-80">
-                        <canvas id="revenueChart"></canvas>
-                    </div>
+                    @if (salesDays(); as days) {
+                        <app-sales-chart [days]="days" />
+                        <!-- The full report (Análisis) is owner only -->
+                        @if (isAdmin()) {
+                            <a routerLink="/content/reports/top-sales" class="inline-block mt-3 text-sm text-blue-800 hover:underline">
+                                Ver más
+                            </a>
+                        }
+                    } @else if (salesError()) {
+                        <p class="h-64 flex items-center justify-center text-sm text-red-700">{{ salesError() }}</p>
+                    } @else {
+                        <p class="h-64 flex items-center justify-center text-sm text-gray-500">Cargando...</p>
+                    }
                 </div>
+                <!-- Add new graph from sale here HU-24 -->
 
                 <!-- Top Products -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

@@ -6,6 +6,8 @@ import { DataServices } from '../../core/services/data-services';
 import { injectPresentations } from '../../core/utils/two-units';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
+import { SalesDay } from '../../models/report';
+import { SalesChart } from '../sales-chart/sales-chart';
 
 // Columns of "Productos a agotarse" that can be sorted by clicking their title
 type LowStockSortKey = 'nombre' | 'categoria' | 'existencia' | 'stock_minimo' | 'faltan' | 'estado';
@@ -15,7 +17,7 @@ const DISMISSED_KEY = 'lowStockDismissed';
 
 // The first page after logging in. HU-22: it says right away what is running out
 @Component({
-  imports: [RouterLink, DecimalPipe],
+  imports: [RouterLink, DecimalPipe, SalesChart],
   selector: 'app-dashboard',
   templateUrl: './dashboard.html',
 })
@@ -91,16 +93,17 @@ export class Dashboard {
     this.dismissed.set(true);
   }
 
-  // HU-26: money in the store, only for the owner (HU-29). null = not loaded / not allowed
+  // HU-26 money in the store and HU-24 sales chart. Every user sees them here (decided
+  // 2026-11-20); the full reports (Análisis) stay owner only. null = loading
   isAdmin = inject(AuthService).isAdmin;
   inventoryValue = signal<number | null>(null);
+  readonly chartRanges = [7, 30];
+  chartDays = signal(30);
+  salesDays = signal<SalesDay[] | null>(null);
+  salesError = signal<string | null>(null);
 
   constructor() {
-    if (this.isAdmin()) {
-      this.dataServices.getInventoryValue().subscribe({
-        next: (report) => this.inventoryValue.set(report.total),
-      });
-    }
+    this.loadSummary();
     this.dataServices.getLowStock().subscribe({
       next: (items) => {
         this.lowStock.set(items);
@@ -110,6 +113,25 @@ export class Dashboard {
         this.error.set('No se pudo revisar qué se está acabando');
         this.loading.set(false);
       },
+    });
+  }
+
+  setChartDays(days: number) {
+    if (days !== this.chartDays()) {
+      this.chartDays.set(days);
+      this.loadSummary();
+    }
+  }
+
+  private loadSummary() {
+    this.salesDays.set(null);
+    this.salesError.set(null);
+    this.dataServices.getDashboardSummary(this.chartDays()).subscribe({
+      next: (summary) => {
+        this.inventoryValue.set(summary.dinero_bodega);
+        this.salesDays.set(summary.por_dia);
+      },
+      error: () => this.salesError.set('No se pudieron cargar las ventas'),
     });
   }
 

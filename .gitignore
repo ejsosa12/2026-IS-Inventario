@@ -122,3 +122,10 @@ docker/db/init/*.sql
 
 # Angular proxy to the VPS (has the server IP); template: proxy.vps.conf.example.json
 frontend/inventory-display/proxy.vps.conf.json
+
+# Local-only helper scripts (demo data seed, etc.)
+backend/scripts/
+
+# SQL file (data recover)
+# NOTE: for recover data use: "mariadb -u TU_USUARIO -p inventory < ~/antes-demo.sql"
+antes-demo.sql

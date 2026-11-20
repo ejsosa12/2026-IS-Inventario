@@ -114,6 +114,14 @@ export const routes: Routes = [
         path: 'reports/movements', canActivate: [adminGuard], loadComponent: () => import('./utils/movements-report/movements-report').then(m => m.MovementsReport)
       },
       {
+        // HU-25: what is not moving (a tab of Análisis). Owner only
+        path: 'reports/stale', canActivate: [adminGuard], loadComponent: () => import('./utils/stale-products/stale-products').then(s => s.StaleProducts)
+      },
+      {
+        // HU-24: what sells the most (a tab of Análisis). Owner only
+        path: 'reports/top-sales', canActivate: [adminGuard], loadComponent: () => import('./utils/top-sales/top-sales').then(t => t.TopSales)
+      },
+      {
         // HU-26 (and future reports): money, owner only
         path: 'reports', canActivate: [adminGuard], loadComponent: () => import('./utils/reports/reports').then(r => r.Reports)
       },

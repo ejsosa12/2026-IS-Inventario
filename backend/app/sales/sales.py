@@ -189,3 +189,188 @@ def get_sale(sale_id):
     if sale is None:
         return _error("sale does not exist", 404)
     return {"status": 0, "message": "SUCCESS: sale", "data": _sale_to_json(sale)}, 200
+
+
+# HU-24: longest range whose days are all filled in (with 0) for the chart
+MAX_CHART_DAYS = 366
+
+
+def _read_date(name):
+    """?desde= / ?hasta= as YYYY-MM-DD. Returns (date or None, error message or None)."""
+    value = request.args.get(name, "").strip()
+    if not value:
+        return None, None
+    try:
+        return date.fromisoformat(value), None
+    except ValueError:
+        return None, f"{name} must be a date YYYY-MM-DD"
+
+
+def _sales_per_day(access, desde, hasta):
+    """[{fecha, ventas, total}] oldest first. With both dates (and a range the chart can show)
+    every day is there, 0 when nothing was sold; otherwise only the days with sales."""
+    start = datetime.combine(desde, time.min) if desde else None
+    end = datetime.combine(hasta + timedelta(days=1), time.min) if hasta else None
+    days = {
+        row["dia"]: {"ventas": row["ventas"], "total": float(row["total"])}
+        for row in access.get_sales_by_day(start, end)
+    }
+    if desde and hasta and (hasta - desde).days < MAX_CHART_DAYS:
+        dates = [desde + timedelta(days=i) for i in range((hasta - desde).days + 1)]
+    else:
+        dates = sorted(days)
+    return [{"fecha": d.isoformat(), **days.get(d, {"ventas": 0, "total": 0.0})} for d in dates]
+
+
+def _top_sale_to_json(row):
+    existencia = float(row["existencia"])
+    minimo = float(row["stock_minimo"]) if row["stock_minimo"] is not None else None
+    return {
+        "id": row["id"],
+        "codigo": row["codigo"],
+        "nombre": row["nombre"],
+        "categoria": row["categoria"],
+        "unidad_base": row["unidad_base"],
+        "activo": bool(row["activo"]),
+        "cantidad": float(row["cantidad"]),
+        "ventas": row["ventas"],
+        "dinero": float(row["dinero"]),
+        "existencia": existencia,
+        "stock_minimo": minimo,
+        # "para nunca quedarme sin eso": same rule as HU-22
+        "bajo_minimo": minimo is not None and existencia <= minimo,
+    }
+
+
+@sales.route('api/v1/top-sales', methods=['GET'])
+@requiere_rol('admin')  # HU-24: reports are the owner's (HU-29)
+def get_top_sales():
+    """HU-24 "Ver lo que más se vende": ?desde=&hasta= (YYYY-MM-DD, hasta includes that day;
+    both optional). Products sold in the range, most sold quantity first, plus sales per day."""
+    desde, error = _read_date("desde")
+    if error:
+        return _error(error)
+    hasta, error = _read_date("hasta")
+    if error:
+        return _error(error)
+    if desde and hasta and desde > hasta:
+        return _error("desde must not be after hasta")
+
+    start = datetime.combine(desde, time.min) if desde else None
+    end = datetime.combine(hasta + timedelta(days=1), time.min) if hasta else None
+    access = AccessData()
+    productos = [_top_sale_to_json(row) for row in access.get_top_sales(start, end)]
+    por_dia = _sales_per_day(access, desde, hasta)
+
+    return {
+        "status": 0,
+        "message": "SUCCESS: top sales",
+        "data": {
+            "desde": desde.isoformat() if desde else None,
+            "hasta": hasta.isoformat() if hasta else None,
+            "resumen": {
+                "productos": len(productos),
+                "ventas": sum(d["ventas"] for d in por_dia),
+                "dinero": round(sum(d["total"] for d in por_dia), 2),
+            },
+            "productos": productos,
+            "por_dia": por_dia,
+        },
+    }, 200
+
+
+DASHBOARD_DAYS = (7, 30)
+
+
+@sales.route('api/v1/dashboard-summary', methods=['GET'])
+@requiere_rol()  # decided 2026-11-20: employees also see these two numbers on the dashboard
+def get_dashboard_summary():
+    """?dias=7|30 (default 30). Only what the dashboard shows: the money in the store
+    (HU-26 total: existencia × precio_compra, products without price left out) and the
+    sales of the last N days for the chart (HU-24). The full reports stay owner only."""
+    dias = request.args.get("dias", "30")
+    if not dias.isdigit() or int(dias) not in DASHBOARD_DAYS:
+        return _error("dias must be 7 or 30")
+    hasta = date.today()
+    desde = hasta - timedelta(days=int(dias) - 1)
+
+    access = AccessData()
+    dinero = sum(
+        (row["existencia"] * row["precio_compra"]).quantize(TWO_DECIMALS)
+        for row in access.get_stock_with_cost()
+        if row["precio_compra"] is not None
+    )
+    return {
+        "status": 0,
+        "message": "SUCCESS: dashboard summary",
+        "data": {
+            "dinero_bodega": float(dinero),
+            "desde": desde.isoformat(),
+            "hasta": hasta.isoformat(),
+            "por_dia": _sales_per_day(access, desde, hasta),
+        },
+    }, 200
+
+
+STALE_DAYS = (30, 60, 90)
+
+
+@sales.route('api/v1/stale-products', methods=['GET'])
+@requiere_rol('admin')  # HU-25: reports are the owner's (HU-29)
+def get_stale_products():
+    """HU-25 "Ver lo que no se mueve": ?dias=30|60|90 (default 90). Products with stock and no
+    sale in that time, with the money they hold at purchase price (same as HU-26).
+    Most money first (decided 2026-11-20, option A); without purchase price at the end."""
+    dias = request.args.get("dias", "90")
+    if not dias.isdigit() or int(dias) not in STALE_DAYS:
+        return _error("dias must be 30, 60 or 90")
+    dias = int(dias)
+    today = date.today()
+    desde = datetime.combine(today - timedelta(days=dias), time.min)
+
+    access = AccessData()
+    productos = []
+    for row in access.get_stale_products(desde):
+        existencia = row["existencia"]
+        precio = row["precio_compra"]
+        ultima = row["ultima_venta"]
+        productos.append({
+            "id": row["id"],
+            "codigo": row["codigo"],
+            "nombre": row["nombre"],
+            "categoria": row["categoria"],
+            "unidad_base": row["unidad_base"],
+            "activo": bool(row["activo"]),
+            "existencia": float(existencia),
+            "precio_compra": float(precio) if precio is not None else None,
+            "dinero": float((existencia * precio).quantize(TWO_DECIMALS)) if precio is not None else None,
+            "ultima_venta": ultima.date().isoformat() if ultima else None,
+            # Days without selling; if it never sold, days since it arrived
+            "dias_sin_vender": (today - (ultima or row["primer_movimiento"]).date()).days,
+            "nunca_vendido": ultima is None,
+        })
+    productos.sort(key=lambda p: (p["dinero"] is None, -(p["dinero"] or 0), -p["dias_sin_vender"]))
+
+    dinero = sum(p["dinero"] for p in productos if p["dinero"] is not None)
+    bodega = sum(
+        (row["existencia"] * row["precio_compra"]).quantize(TWO_DECIMALS)
+        for row in access.get_stock_with_cost()
+        if row["precio_compra"] is not None
+    )
+    return {
+        "status": 0,
+        "message": "SUCCESS: stale products",
+        "data": {
+            "dias": dias,
+            "desde": desde.date().isoformat(),
+            "resumen": {
+                "productos": len(productos),
+                "dinero": round(dinero, 2),
+                "valor_bodega": float(bodega),
+                "porcentaje": round(dinero / float(bodega) * 100, 1) if bodega else 0,
+                "nunca_vendidos": sum(1 for p in productos if p["nunca_vendido"]),
+                "sin_precio": sum(1 for p in productos if p["dinero"] is None),
+            },
+            "productos": productos,
+        },
+    }, 200

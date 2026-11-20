@@ -29,7 +29,12 @@ import {
   CountDetail,
   CountItemInput,
 } from '../../models/count';
-import { InventoryValue } from '../../models/report';
+import {
+  DashboardSummary,
+  InventoryValue,
+  StaleProductsReport,
+  TopSalesReport,
+} from '../../models/report';
 import {
   MovementsFilter,
   MovementsReport,
@@ -241,6 +246,34 @@ export class DataServices {
     return this.http
       .get<ApiResponse<InventoryValue>>(`${this.API_URL}/inventory-value`)
       .pipe(map((response) => response.data as InventoryValue));
+  }
+
+  // Dashboard: money in the store (HU-26) and sales of the last 7/30 days (HU-24). Every user
+  getDashboardSummary(dias: number) {
+    return this.http
+      .get<ApiResponse<DashboardSummary>>(`${this.API_URL}/dashboard-summary`, {
+        params: { dias: String(dias) },
+      })
+      .pipe(map((response) => response.data as DashboardSummary));
+  }
+
+  // HU-25: products with stock and no sale in the last 30/60/90 days. Owner only
+  getStaleProducts(dias: number) {
+    return this.http
+      .get<ApiResponse<StaleProductsReport>>(`${this.API_URL}/stale-products`, {
+        params: { dias: String(dias) },
+      })
+      .pipe(map((response) => response.data as StaleProductsReport));
+  }
+
+  // HU-24: products sold in the range (most sold first) and sales per day. Owner only
+  getTopSales(desde: string | null, hasta: string | null) {
+    const params: Record<string, string> = {};
+    if (desde) params['desde'] = desde;
+    if (hasta) params['hasta'] = hasta;
+    return this.http
+      .get<ApiResponse<TopSalesReport>>(`${this.API_URL}/top-sales`, { params })
+      .pipe(map((response) => response.data as TopSalesReport));
   }
 
   // HU-32: the open physical count, or null when there is none
