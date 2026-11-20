@@ -73,9 +73,17 @@ export interface DashboardSummary {
   desde: string;
   hasta: string;
   por_dia: SalesDay[];
+  pendientes: DashboardPending;
   mas_vendidos: DashboardTopProduct[]; // the 4 most sold of those days
   ultimas_ventas: Sale[]; // the 4 latest sales
   ultimos_movimientos: DashboardActivity[]; // the 4 latest movements
+}
+
+// The "Pendientes" box (out of stock comes from low-stock)
+export interface DashboardPending {
+  facturas_faltantes: number; // HU-12
+  conteo_abierto: { id: number; creado_en: string } | null; // HU-32
+  sin_precio: number | null; // HU-26, null for employees
 }
 
 export interface DashboardTopProduct {

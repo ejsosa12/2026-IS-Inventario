@@ -34,7 +34,8 @@ export class EntriesList {
     Number(inject(ActivatedRoute).snapshot.queryParamMap.get('entrada')) || null;
 
   // HU-12: "entradas con faltantes"
-  onlyShortages = signal(false);
+  // ?faltantes=1 (the dashboard's "Pendientes") opens with the filter on
+  onlyShortages = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('faltantes') === '1');
 
   // The entry opened to see its products
   openId = signal<number | null>(null);

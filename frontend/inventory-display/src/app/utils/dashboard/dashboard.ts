@@ -6,7 +6,7 @@ import { DataServices } from '../../core/services/data-services';
 import { injectPresentations } from '../../core/utils/two-units';
 import { LowStockItem, UnidadBase } from '../../models/product';
 import { ariaSort, nextSort, sortIcon, sortList, SortState } from '../../core/utils/sort';
-import { DashboardActivity, DashboardTopProduct, SalesDay } from '../../models/report';
+import { DashboardActivity, DashboardPending, DashboardTopProduct, SalesDay } from '../../models/report';
 import { Sale } from '../../models/sale';
 import { MovementTipo } from '../../models/movement';
 import { MOVEMENT_TYPES } from '../../core/utils/movement-types';
@@ -116,6 +116,14 @@ export class Dashboard {
   latestSales = signal<Sale[] | null>(null);
   activity = signal<DashboardActivity[] | null>(null);
 
+  // "Pendientes": what someone has to sort out (null = loading)
+  pending = signal<DashboardPending | null>(null);
+  nothingPending = computed(() => {
+    const p = this.pending();
+    return !!p && !this.loading() && !this.outOfStock() && !p.facturas_faltantes &&
+      !p.conteo_abierto && !p.sin_precio;
+  });
+
   constructor() {
     this.loadSummary();
     this.dataServices.getLowStock().subscribe({
@@ -148,6 +156,7 @@ export class Dashboard {
         this.topProducts.set(summary.mas_vendidos);
         this.latestSales.set(summary.ultimas_ventas);
         this.activity.set(summary.ultimos_movimientos);
+        this.pending.set(summary.pendientes);
       },
       error: () => this.salesError.set('No se pudieron cargar las ventas'),
     });

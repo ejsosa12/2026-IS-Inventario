@@ -147,6 +147,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600">Total Orders</p>
+                            <!-- Add here total sales of the month  -->
                             <p class="text-3xl font-bold text-gray-900 mt-2">2,847</p>
                             <div class="flex items-center mt-2">
                                 <span class="text-green-600 text-sm font-medium flex items-center">
@@ -167,6 +168,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600">Products</p>
+                            <!-- Add here the total productos of that exists of the inventory -->
                             <p class="text-3xl font-bold text-gray-900 mt-2">1,247</p>
                             <div class="flex items-center mt-2">
                                 <span class="text-green-600 text-sm font-medium flex items-center">
@@ -369,41 +371,64 @@
                     </div>
                 </div>
 
-                <!-- System Status -->
+                <!-- "Pendientes": what someone has to sort out, each line links to where it is fixed.
+                     Lines at 0 are hidden -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <span class="text-sm text-gray-900">Server Status</span>
-                            </div>
-                            <span class="text-sm text-green-600 font-medium">Online</span>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Pendientes</h3>
+                    @if (pending(); as p) {
+                        <div class="space-y-4">
+                            <!-- HU-22: out of stock (products with a mínimo), scrolls to the list below -->
+                            @if (outOfStock()) {
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 flex-shrink-0 bg-red-500 rounded-full"></div>
+                                        <span class="text-sm text-gray-900">{{ plural(outOfStock(), 'producto agotado', 'productos agotados') }}</span>
+                                    </div>
+                                    <button type="button" (click)="showLowStockList()" class="text-sm text-blue-800 font-medium hover:underline whitespace-nowrap">Ver</button>
+                                </div>
+                            }
+                            <!-- HU-12 -->
+                            @if (p.facturas_faltantes) {
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 flex-shrink-0 bg-yellow-500 rounded-full"></div>
+                                        <span class="text-sm text-gray-900">{{ plural(p.facturas_faltantes, 'factura con faltantes', 'facturas con faltantes') }}</span>
+                                    </div>
+                                    <a routerLink="/content/entries-list" [queryParams]="{ faltantes: 1 }" class="text-sm text-blue-800 font-medium hover:underline whitespace-nowrap">Ver</a>
+                                </div>
+                            }
+                            <!-- HU-32 -->
+                            @if (p.conteo_abierto; as conteo) {
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 flex-shrink-0 bg-yellow-500 rounded-full"></div>
+                                        <span class="text-sm text-gray-900">Conteo físico abierto desde el {{ dateTime(conteo.creado_en).slice(0, 10) }}</span>
+                                    </div>
+                                    <a routerLink="/content/counts" class="text-sm text-blue-800 font-medium hover:underline whitespace-nowrap">Ver</a>
+                                </div>
+                            }
+                            <!-- HU-26: only the owner gets this number (null for employees) -->
+                            @if (p.sin_precio) {
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 flex-shrink-0 bg-yellow-500 rounded-full"></div>
+                                        <span class="text-sm text-gray-900">{{ plural(p.sin_precio, 'producto con existencia sin precio de compra', 'productos con existencia sin precio de compra') }}</span>
+                                    </div>
+                                    <a routerLink="/content/reports" class="text-sm text-blue-800 font-medium hover:underline whitespace-nowrap">Ver</a>
+                                </div>
+                            }
+                            @if (nothingPending()) {
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 flex-shrink-0 bg-green-500 rounded-full"></div>
+                                    <span class="text-sm text-green-700 font-medium">Nada pendiente</span>
+                                </div>
+                            }
                         </div>
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <span class="text-sm text-gray-900">Database</span>
-                            </div>
-                            <span class="text-sm text-green-600 font-medium">Active</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                                <span class="text-sm text-gray-900">API Status</span>
-                            </div>
-                            <span class="text-sm text-yellow-600 font-medium">Warning</span>
-                        </div>
-                        <div class="mt-6">
-                            <div class="flex justify-between text-sm text-gray-600 mb-2">
-                                <span>Server Load</span>
-                                <span>68%</span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2">
-                                <div class="bg-cordes-blue h-2 rounded-full" style="width: 68%"></div>
-                            </div>
-                        </div>
-                    </div>
+                    } @else if (salesError()) {
+                        <p class="text-sm text-red-700">No se pudieron cargar los pendientes</p>
+                    } @else {
+                        <p class="text-sm text-gray-500">Cargando...</p>
+                    }
                 </div>
             </div>
             <!-- HU-22: list of minimum stock and out of stock. Out of stock first, then furthest from the minimum -->

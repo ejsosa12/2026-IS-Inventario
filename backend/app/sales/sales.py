@@ -307,11 +307,24 @@ def get_dashboard_summary():
     desde = hasta - timedelta(days=int(dias) - 1)
 
     access = AccessData()
+    stock = access.get_stock_with_cost()
     dinero = sum(
         (row["existencia"] * row["precio_compra"]).quantize(TWO_DECIMALS)
-        for row in access.get_stock_with_cost()
+        for row in stock
         if row["precio_compra"] is not None
     )
+    conteo = access.get_open_count()
+    # "Pendientes" box: what someone has to sort out. Out of stock comes from low-stock (HU-22)
+    pendientes = {
+        # HU-12: valid invoices where something arrived different from the paper
+        "facturas_faltantes": len(access.get_entries(only_with_shortages=True)),
+        # HU-32: the open count, if any
+        "conteo_abierto": {"id": conteo["id"], "creado_en": conteo["creado_en"].isoformat()} if conteo else None,
+        # HU-26: products with stock but no purchase price (left out of the money). Owner only
+        "sin_precio": (
+            sum(1 for row in stock if row["precio_compra"] is None) if g.user["rol"] == "admin" else None
+        ),
+    }
     return {
         "status": 0,
         "message": "SUCCESS: dashboard summary",
@@ -320,6 +333,7 @@ def get_dashboard_summary():
             "desde": desde.isoformat(),
             "hasta": hasta.isoformat(),
             "por_dia": _sales_per_day(access, desde, hasta),
+            "pendientes": pendientes,
             # The dashboard's three lists (decided 2026-11-20: every user, no purchase prices)
             "mas_vendidos": _dashboard_top(access, desde, hasta),
             "ultimas_ventas": [
